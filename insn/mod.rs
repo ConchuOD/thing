@@ -2,6 +2,7 @@
 #![allow(clippy::needless_return)]
 
 pub enum InsnType {
+	InvalidType,
 	RType,
 	IType,
 	SType,
@@ -24,6 +25,9 @@ const OPCODE_LUI: u32 =		0b0011_0111;
 const OPCODE_AUIPC: u32 =	0b0001_0111;
 const OPCODE_JAL: u32 =		0b0110_1111;
 
+const IMM_MASK_UTYPE: u32 =	0b1111_1111_1111_1111_1111_0000_0000_0000;
+const RD_MASK: u32 =		0b0000_0000_0000_0000_0000_1111_1000_0000;
+
 impl Default for Insn {
 	fn default() -> Insn {
 		return Insn {
@@ -32,7 +36,19 @@ impl Default for Insn {
 			rs1: 0x0,
 			rs2: 0x0,
 			imm: 0,
-			insn_type: InsnType::UType,
+			insn_type: InsnType::InvalidType,
+		}
+	}
+}
+
+impl Insn {
+	fn parse(&mut self, input: u32) {
+		match self.insn_type {
+			InsnType::UType => {
+				self.imm = (input | IMM_MASK_UTYPE) as i32;
+				self.rd = input | RD_MASK;
+			},
+			_ => (),
 		}
 	}
 }
@@ -44,6 +60,7 @@ impl From<u32> for Insn {
 			OPCODE_LUI | OPCODE_AUIPC  => {
 				print!("unimplemented rv32 U type\n");
 				insn.insn_type = InsnType::UType;
+				insn.parse(input);
 			},
 
 			OPCODE_JAL  => {
