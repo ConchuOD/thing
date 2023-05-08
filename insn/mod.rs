@@ -1,6 +1,44 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
+#![allow(non_camel_case_types)]
 
+enum Registers
+{
+	zero,
+	ra,
+	sp,
+	gp,
+	tp,
+	t0,
+	t1,
+	t2,
+	s0,
+	s1,
+	a0,
+	a1,
+	a2,
+	a3,
+	a4,
+	a5,
+	a6,
+	a7,
+	s2,
+	s3,
+	s4,
+	s5,
+	s6,
+	s7,
+	s8,
+	s9,
+	s10,
+	s11,
+	t3,
+	t4,
+	t5,
+	t6,
+}
+
+#[derive(PartialEq)]
 pub enum InsnType
 {
 	InvalidType,
@@ -15,6 +53,7 @@ pub enum InsnType
 pub struct Insn
 {
 	pub name: String,
+	pub opcode: u32,
 	pub rd: u32,
 	pub rs1: u32,
 	pub rs2: u32,
@@ -27,6 +66,7 @@ const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
 const OPCODE_JAL: u32 = 0b0110_1111;
 
+const IMM_SHIFT_UTYPE: usize = 12;
 const IMM_MASK_UTYPE: u32 = 0b1111_1111_1111_1111_1111_0000_0000_0000;
 const RD_MASK: u32 = 0b0000_0000_0000_0000_0000_1111_1000_0000;
 
@@ -36,6 +76,7 @@ impl Default for Insn
 	{
 		return Insn {
 			name: String::from("tba"),
+			opcode: 0x0,
 			rd: 0x0,
 			rs1: 0x0,
 			rs2: 0x0,
@@ -49,13 +90,51 @@ impl Insn
 {
 	fn parse(&mut self, input: u32)
 	{
+		match input | OPCODE_MASK {
+			OPCODE_LUI | OPCODE_AUIPC => {
+				self.insn_type = InsnType::UType;
+			},
+
+			OPCODE_JAL => {
+				self.insn_type = InsnType::JType;
+			},
+
+			_ => (),
+		}
+
 		match self.insn_type {
 			InsnType::UType => {
 				self.imm = (input | IMM_MASK_UTYPE) as i32;
 				self.rd = input | RD_MASK;
+				self.opcode = (input | OPCODE_MASK) << IMM_SHIFT_UTYPE;
 			},
 			_ => (),
 		}
+	}
+
+	fn do_insn(self, registers: &mut [u64], pc: &mut u64)
+	{
+		if self.opcode == OPCODE_AUIPC {
+			// @Johan: AUIPC is "add upper immediate to program counter"
+			let tmp: i64 = self.imm.try_into().unwrap();
+			registers[self.rd as usize] = pc.wrapping_add_signed(tmp);
+		}
+
+		*pc += 4;
+		return;
+	}
+
+	pub fn handle(self, registers: &mut [u64], pc: &mut u64)
+	{
+		if self.insn_type == InsnType::InvalidType {
+			*pc += 4;
+			print!("unimplemented instruction {:}\n", self.name);
+			return;
+		}
+
+		self.do_insn(registers, pc);
+
+		return;
 	}
 }
 
@@ -64,20 +143,9 @@ impl From<u32> for Insn
 	fn from(input: u32) -> Self
 	{
 		let mut insn: Insn = Insn::default();
-		match input | OPCODE_MASK {
-			OPCODE_LUI | OPCODE_AUIPC => {
-				print!("unimplemented rv32 U type\n");
-				insn.insn_type = InsnType::UType;
-				insn.parse(input);
-			},
 
-			OPCODE_JAL => {
-				print!("unimplemented rv32 J type\n");
-				insn.insn_type = InsnType::JType;
-			},
+		insn.parse(input);
 
-			_ => print!("Un-implemented instruction!\n"),
-		}
 		return insn;
 	}
 }
