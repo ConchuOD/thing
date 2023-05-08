@@ -35,9 +35,9 @@ impl Default for Insn {
 			rd: 0x0,
 			rs1: 0x0,
 			rs2: 0x0,
-			imm: 0,
+			imm: 0x0,
 			insn_type: InsnType::InvalidType,
-		}
+		};
 	}
 }
 
@@ -47,7 +47,7 @@ impl Insn {
 			InsnType::UType => {
 				self.imm = (input | IMM_MASK_UTYPE) as i32;
 				self.rd = input | RD_MASK;
-			},
+			}
 			_ => (),
 		}
 	}
@@ -57,20 +57,20 @@ impl From<u32> for Insn {
 	fn from(input: u32) -> Self {
 		let mut insn: Insn = Insn::default();
 		match input | OPCODE_MASK {
-			OPCODE_LUI | OPCODE_AUIPC  => {
+			OPCODE_LUI | OPCODE_AUIPC => {
 				print!("unimplemented rv32 U type\n");
 				insn.insn_type = InsnType::UType;
 				insn.parse(input);
-			},
+			}
 
-			OPCODE_JAL  => {
+			OPCODE_JAL => {
 				print!("unimplemented rv32 J type\n");
 				insn.insn_type = InsnType::JType;
-			},
+			}
 
 			_ => print!("Un-implemented instruction!\n"),
 		}
-		return insn
+		return insn;
 	}
 }
 
