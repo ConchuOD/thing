@@ -1,2 +1,10 @@
 brace_style = "AlwaysNextLine"
 hard_tabs = true
+wrap_comments = true
+comment_width = 100
+fn_params_layout = "Compressed"
+fn_call_width = 100
+force_multiline_blocks = true
+match_block_trailing_comma = true
+newline_style = "Unix"
+normalize_comments = true
