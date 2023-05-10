@@ -28,21 +28,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 {
 	let args = Args::parse();
 	let elf: Vec<u8> = fs::read(args.elf)?;
+
 	let mut registers: [u64; 32] = [0; 32];
 	let mut pc: u64;
 
-	let entry_point: usize = 0x142;
+	let entry_point: usize = 0x164;
 	let insn_start: usize = 0xe8;
 
-	let program: &[u8] = &elf[insn_start..];
-
+	// fe010113
 	pc = entry_point as u64;
 
-	while (pc as usize) < program.len() {
-		let insn_bits: &[u8] = &program[pc as usize..(pc + 4) as usize];
+	let mut hack: usize = 0;
+
+	while (pc as usize) < elf.len() {
+		let insn_bits: &[u8] = &elf[pc as usize..(pc + 4) as usize];
 		let insn: u32 = u8s_to_insn(insn_bits.try_into()?);
-		let something: insn::Insn = insn::Insn::from(insn);
+		let mut something: insn::Insn = insn::Insn::from(insn);
+
 		something.handle(&mut registers, &mut pc);
+
+		hack += 1;
+		if hack > 20 {
+			return Ok(());
+		}
 	}
 
 	return Ok(());

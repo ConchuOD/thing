@@ -58,6 +58,7 @@ pub struct Insn
 	pub rs1: u32,
 	pub rs2: u32,
 	pub imm: i32,
+	pub func3: u32,
 	pub insn_type: InsnType,
 }
 
@@ -66,9 +67,36 @@ const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
 const OPCODE_JAL: u32 = 0b0110_1111;
 
+const OPCODE_ARITH: u32 = 0b0001_0011; //TODO: fix naming
+
 const IMM_SHIFT_UTYPE: usize = 12;
-const IMM_MASK_UTYPE: u32 = 0b1111_1111_1111_1111_1111_0000_0000_0000;
-const RD_MASK: u32 = 0b0000_0000_0000_0000_0000_1111_1000_0000;
+const IMM_MASK_UTYPE: u32 = 0b1111_1111_1111_1111_1111 << IMM_SHIFT_UTYPE;
+
+const IMM_SHIFT_ITYPE: usize = 20;
+const IMM_MASK_ITYPE: u32 = 0b1111_1111_1111 << IMM_SHIFT_ITYPE;
+const FUNC3_SHIFT_ITYPE: usize = 12;
+const FUNC3_MASK_ITYPE: u32 = 0b111 << FUNC3_SHIFT_ITYPE;
+
+//this should be an enum, right?
+const FUNC3_SLLI: u32 = 0b001;
+const FUNC3_SRLI: u32 = 0b101;
+const FUNC3_SRAI: u32 = 0b101;
+const FUNC3_ADD: u32 = 0b000;
+const FUNC3_SUB: u32 = 0b000;
+const FUNC3_SLL: u32 = 0b001;
+const FUNC3_SLT: u32 = 0b010;
+const FUNC3_SLTU: u32 = 0b011;
+const FUNC3_XOR: u32 = 0b100;
+const FUNC3_SRL: u32 = 0b101;
+const FUNC3_SRA: u32 = 0b101;
+const FUNC3_OR: u32 = 0b110;
+const FUNC3_AND: u32 = 0b111;
+
+const RD_SHIFT: usize = 7;
+const RD_MASK: u32 = 0b1_1111 << RD_SHIFT;
+
+const RS1_SHIFT: usize = 15;
+const RS1_MASK: u32 = 0b1_1111 << RS1_SHIFT;
 
 impl Default for Insn
 {
@@ -81,6 +109,7 @@ impl Default for Insn
 			rs1: 0x0,
 			rs2: 0x0,
 			imm: 0x0,
+			func3: 0x0,
 			insn_type: InsnType::InvalidType,
 		};
 	}
@@ -90,7 +119,9 @@ impl Insn
 {
 	fn parse(&mut self, input: u32)
 	{
-		match input | OPCODE_MASK {
+		self.opcode = input & OPCODE_MASK;
+
+		match self.opcode {
 			OPCODE_LUI | OPCODE_AUIPC => {
 				self.insn_type = InsnType::UType;
 			},
@@ -99,36 +130,72 @@ impl Insn
 				self.insn_type = InsnType::JType;
 			},
 
-			_ => (),
+			OPCODE_ARITH => {
+				self.insn_type = InsnType::IType;
+			},
+
+			_ => print!("unknown opcode {:?}\n", self.opcode),
 		}
 
 		match self.insn_type {
 			InsnType::UType => {
-				self.imm = (input | IMM_MASK_UTYPE) as i32;
-				self.rd = input | RD_MASK;
-				self.opcode = (input | OPCODE_MASK) << IMM_SHIFT_UTYPE;
+				self.imm = (input & IMM_MASK_UTYPE) as i32;
+				self.rd = input & RD_MASK >> RD_SHIFT;
 			},
+
+			InsnType::IType => {
+				self.imm = ((input & IMM_MASK_ITYPE) >> IMM_SHIFT_ITYPE) as i32;
+				self.rd = (input & RD_MASK) >> RD_SHIFT;
+				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
+				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
+			},
+
 			_ => (),
 		}
 	}
 
-	fn do_insn(self, registers: &mut [u64], pc: &mut u64)
+	fn arith(&mut self, registers: &mut [u64], pc: &mut u64) {
+		match self.func3 {
+			FUNC3_ADD => {
+				self.name = String::from("addi");
+				// ADDI adds the sign-extended 12-bit immediate
+				// to register rs1. Arithmetic overflow is
+				// ignored and the result is simply the low XLEN
+				// bits of the result.
+				let mut tmp: u64 = registers[self.rs1 as usize];
+				let mut imm: i64 = self.imm.try_into().unwrap();
+				imm = imm.wrapping_shl(52).wrapping_shr(52);
+				tmp = tmp.wrapping_add_signed(imm);
+				registers[self.rd as usize] = tmp;
+			},
+
+			_ => (),
+		}
+
+		print!("Found {:}\n", self.name);
+	}
+
+	fn do_insn(&mut self, registers: &mut [u64], pc: &mut u64)
 	{
 		if self.opcode == OPCODE_AUIPC {
+			self.name = String::from("auipc");
+			print!("Found {:}\n", self.name);
 			// @Johan: AUIPC is "add upper immediate to program counter"
 			let tmp: i64 = self.imm.try_into().unwrap();
 			registers[self.rd as usize] = pc.wrapping_add_signed(tmp);
+		} else if self.opcode == OPCODE_ARITH {
+			self.arith(registers, pc);
 		}
 
 		*pc += 4;
 		return;
 	}
 
-	pub fn handle(self, registers: &mut [u64], pc: &mut u64)
+	pub fn handle(&mut self, registers: &mut [u64], pc: &mut u64)
 	{
 		if self.insn_type == InsnType::InvalidType {
 			*pc += 4;
-			print!("unimplemented instruction {:}\n", self.name);
+			print!("unimplemented instruction {:x}\n", self.opcode);
 			return;
 		}
 
