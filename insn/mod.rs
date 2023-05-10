@@ -62,6 +62,14 @@ pub struct Insn
 	pub insn_type: InsnType,
 }
 
+macro_rules! gen_mask
+{
+	($h:expr, $l:expr) => {
+		(((!0) - (1_u32.wrapping_shl($l)) + 1) &
+		 (!0 & (!0_32 >> (32 - 1 - ($h)) as u32)))
+	}
+}
+
 const OPCODE_MASK: u32 = 0b0111_1111;
 const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
@@ -69,13 +77,17 @@ const OPCODE_JAL: u32 = 0b0110_1111;
 
 const OPCODE_ARITH: u32 = 0b0001_0011; //TODO: fix naming
 
-const IMM_SHIFT_UTYPE: usize = 12;
-const IMM_MASK_UTYPE: u32 = 0b1111_1111_1111_1111_1111 << IMM_SHIFT_UTYPE;
+const IMM_SHIFT_UTYPE: u32 = 12;
+const IMM_WIDTH_UTYPE: u32 = 20;
+const IMM_MASK_UTYPE: u32 = gen_mask!(IMM_SHIFT_UTYPE + IMM_WIDTH_UTYPE - 1, IMM_SHIFT_UTYPE);
 
-const IMM_SHIFT_ITYPE: usize = 20;
-const IMM_MASK_ITYPE: u32 = 0b1111_1111_1111 << IMM_SHIFT_ITYPE;
-const FUNC3_SHIFT_ITYPE: usize = 12;
-const FUNC3_MASK_ITYPE: u32 = 0b111 << FUNC3_SHIFT_ITYPE;
+const IMM_SHIFT_ITYPE: u32 = 20;
+const IMM_WIDTH_ITYPE: u32 = 12;
+const IMM_MASK_ITYPE: u32 = gen_mask!(IMM_SHIFT_ITYPE + IMM_WIDTH_ITYPE - 1, IMM_SHIFT_ITYPE);
+
+const FUNC3_SHIFT_ITYPE: u32 = 12;
+const FUNC3_WIDTH_ITYPE: u32 = 3;
+const FUNC3_MASK_ITYPE: u32 = gen_mask!(FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1, FUNC3_SHIFT_ITYPE);
 
 //this should be an enum, right?
 const FUNC3_SLLI: u32 = 0b001;
@@ -92,11 +104,13 @@ const FUNC3_SRA: u32 = 0b101;
 const FUNC3_OR: u32 = 0b110;
 const FUNC3_AND: u32 = 0b111;
 
-const RD_SHIFT: usize = 7;
-const RD_MASK: u32 = 0b1_1111 << RD_SHIFT;
+const RD_SHIFT: u32 = 7;
+const RD_WIDTH: u32 = 5;
+const RD_MASK: u32 = gen_mask!(RD_SHIFT + RD_WIDTH - 1, RD_SHIFT);
 
-const RS1_SHIFT: usize = 15;
-const RS1_MASK: u32 = 0b1_1111 << RS1_SHIFT;
+const RS1_SHIFT: u32 = 15;
+const RS1_WIDTH: u32 = 5;
+const RS1_MASK: u32 = gen_mask!(RS1_SHIFT + RS1_WIDTH - 1, RS1_SHIFT);
 
 impl Default for Insn
 {
