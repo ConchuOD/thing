@@ -5,6 +5,7 @@ use clap::Parser;
 use std::fs;
 
 mod insn;
+mod hart;
 
 /// thing
 #[derive(Parser, Debug)]
@@ -29,23 +30,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 	let args = Args::parse();
 	let elf: Vec<u8> = fs::read(args.elf)?;
 
-	let mut registers: [u64; 32] = [0; 32];
-	let mut pc: u64;
+	// @Johan: "hart" is the RISC-V term for what Intel calls a "thread"
+	let mut hart: hart::Hart = hart::Hart::default();
 
 	let entry_point: usize = 0x164;
 	let insn_start: usize = 0xe8;
 
 	// fe010113
-	pc = entry_point as u64;
+	hart.pc = entry_point as u64;
 
 	let mut hack: usize = 0;
 
-	while (pc as usize) < elf.len() {
-		let insn_bits: &[u8] = &elf[pc as usize..(pc + 4) as usize];
+	while (hart.pc as usize) < elf.len() {
+		let insn_bits: &[u8] = &elf[hart.pc as usize..(hart.pc + 4) as usize];
 		let insn: u32 = u8s_to_insn(insn_bits.try_into()?);
 		let mut something: insn::Insn = insn::Insn::from(insn);
 
-		something.handle(&mut registers, &mut pc);
+		something.handle(&mut hart.registers, &mut hart.pc);
 
 		hack += 1;
 		if hack > 20 {
