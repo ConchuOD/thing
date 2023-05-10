@@ -62,12 +62,10 @@ pub struct Insn
 	pub insn_type: InsnType,
 }
 
-macro_rules! gen_mask
-{
+macro_rules! gen_mask {
 	($h:expr, $l:expr) => {
-		(((!0) - (1_u32.wrapping_shl($l)) + 1) &
-		 (!0 & (!0_32 >> (32 - 1 - ($h)) as u32)))
-	}
+		(((!0) - (1_u32.wrapping_shl($l)) + 1) & (!0 & (!0_32 >> (32 - 1 - ($h)) as u32)))
+	};
 }
 
 const OPCODE_MASK: u32 = 0b0111_1111;
@@ -75,7 +73,7 @@ const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
 const OPCODE_JAL: u32 = 0b0110_1111;
 
-const OPCODE_ARITH: u32 = 0b0001_0011; //TODO: fix naming
+const OPCODE_ARITH: u32 = 0b0001_0011; // TODO: fix naming
 
 const IMM_SHIFT_UTYPE: u32 = 12;
 const IMM_WIDTH_UTYPE: u32 = 20;
@@ -87,9 +85,10 @@ const IMM_MASK_ITYPE: u32 = gen_mask!(IMM_SHIFT_ITYPE + IMM_WIDTH_ITYPE - 1, IMM
 
 const FUNC3_SHIFT_ITYPE: u32 = 12;
 const FUNC3_WIDTH_ITYPE: u32 = 3;
-const FUNC3_MASK_ITYPE: u32 = gen_mask!(FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1, FUNC3_SHIFT_ITYPE);
+const FUNC3_MASK_ITYPE: u32 =
+	gen_mask!(FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1, FUNC3_SHIFT_ITYPE);
 
-//this should be an enum, right?
+// this should be an enum, right?
 const FUNC3_SLLI: u32 = 0b001;
 const FUNC3_SRLI: u32 = 0b101;
 const FUNC3_SRAI: u32 = 0b101;
@@ -168,7 +167,8 @@ impl Insn
 		}
 	}
 
-	fn arith(&mut self, registers: &mut [u64], pc: &mut u64) {
+	fn arith(&mut self, registers: &mut [u64], pc: &mut u64)
+	{
 		match self.func3 {
 			FUNC3_ADD => {
 				self.name = String::from("addi");
