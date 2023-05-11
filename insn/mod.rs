@@ -110,7 +110,7 @@ impl Insn
 				self.insn_type = InsnType::IType;
 			},
 
-			_ => print!("unknown opcode {:?}\n", self.opcode),
+			_ => println!("unknown opcode {:?}", self.opcode),
 		}
 
 		match self.insn_type {
@@ -130,7 +130,7 @@ impl Insn
 		}
 	}
 
-	fn arith(&mut self, registers: &mut [u64], pc: &mut u64)
+	fn arith(&mut self, registers: &mut [u64], _pc: &mut u64)
 	{
 		match self.func3 {
 			FUNC3_ADD => {
@@ -146,17 +146,21 @@ impl Insn
 				registers[self.rd as usize] = tmp;
 			},
 
+			FUNC3_SUB => {
+				self.name = String::from("addi");
+			},
+
 			_ => (),
 		}
 
-		print!("Found {:}\n", self.name);
+		println!("Found {:}", self.name);
 	}
 
 	fn do_insn(&mut self, registers: &mut [u64], pc: &mut u64)
 	{
 		if self.opcode == OPCODE_AUIPC {
 			self.name = String::from("auipc");
-			print!("Found {:}\n", self.name);
+			println!("Found {:}", self.name);
 			// @Johan: AUIPC is "add upper immediate to program counter"
 			let tmp: i64 = self.imm.try_into().unwrap();
 			registers[self.rd as usize] = pc.wrapping_add_signed(tmp);
@@ -172,7 +176,7 @@ impl Insn
 	{
 		if self.insn_type == InsnType::InvalidType {
 			*pc += 4;
-			print!("unimplemented instruction {:x}\n", self.opcode);
+			println!("unimplemented instruction {:x}", self.opcode);
 			return;
 		}
 
