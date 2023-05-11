@@ -22,6 +22,7 @@ pub struct Insn
 	pub rs2: u32,
 	pub imm: i32,
 	pub func3: u32,
+	pub func7: u32,
 	pub insn_type: InsnType,
 }
 
@@ -75,6 +76,25 @@ const FUNC3_SRA: u32 = 0b101;
 const FUNC3_OR: u32 = 0b110;
 const FUNC3_AND: u32 = 0b111;
 
+const FUNC7_SHIFT_ITYPE: u32 = 25;
+const FUNC7_WIDTH_ITYPE: u32 = 7;
+const FUNC7_MASK_ITYPE: u32 =
+	gen_mask!(FUNC7_SHIFT_ITYPE + FUNC7_WIDTH_ITYPE - 1, FUNC7_SHIFT_ITYPE);
+
+const FUNC7_SLLI: u32 = 0b0000000;
+const FUNC7_SRLI: u32 = 0b0000000;
+const FUNC7_SRAI: u32 = 0b0100000;
+const FUNC7_ADD: u32 = 0b0000000;
+const FUNC7_SUB: u32 = 0b0100000;
+const FUNC7_SLL: u32 = 0b0000000;
+const FUNC7_SLT: u32 = 0b0000000;
+const FUNC7_SLTU: u32 = 0b0000000;
+const FUNC7_XOR: u32 = 0b0000000;
+const FUNC7_SRL: u32 = 0b0000000;
+const FUNC7_SRA: u32 = 0b0100000;
+const FUNC7_OR: u32 = 0b0000000;
+const FUNC7_AND: u32 = 0b0000000;
+
 const RD_SHIFT: u32 = 7;
 const RD_WIDTH: u32 = 5;
 const RD_MASK: u32 = gen_mask!(RD_SHIFT + RD_WIDTH - 1, RD_SHIFT);
@@ -82,6 +102,10 @@ const RD_MASK: u32 = gen_mask!(RD_SHIFT + RD_WIDTH - 1, RD_SHIFT);
 const RS1_SHIFT: u32 = 15;
 const RS1_WIDTH: u32 = 5;
 const RS1_MASK: u32 = gen_mask!(RS1_SHIFT + RS1_WIDTH - 1, RS1_SHIFT);
+
+const RS2_SHIFT: u32 = 20;
+const RS2_WIDTH: u32 = 5;
+const RS2_MASK: u32 = gen_mask!(RS2_SHIFT + RS2_WIDTH - 1, RS2_SHIFT);
 
 impl Default for Insn
 {
@@ -95,6 +119,7 @@ impl Default for Insn
 			rs2: 0x0,
 			imm: 0x0,
 			func3: 0x0,
+			func7: 0x0,
 			insn_type: InsnType::Invalid,
 		};
 	}
@@ -139,19 +164,40 @@ impl Insn
 				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
 			},
 
+			InsnType::R => {
+				self.rd = (input & RD_MASK) >> RD_SHIFT;
+				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
+				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
+				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
+				self.func7 = (input & FUNC7_MASK_ITYPE) >> FUNC7_SHIFT_ITYPE;
+			},
+
 			_ => (),
 		}
 	}
 
-	fn arith_r(&mut self, _registers: &mut [u64], _pc: &mut u64)
+	fn arith_r(&mut self, registers: &mut [u64], _pc: &mut u64)
 	{
 		match self.func3 {
 			FUNC3_ADD => {
-				self.name = String::from("add");
+				if self.func7 != 0 {
+					self.name = String::from("add");
+					// ADD adds the value in rs1 to rs2 and stores
+					// the result in rd
+					// overflows are ignored, the lower XLEN bits
+					// get written
+					let rs1: u64 = registers[self.rs1 as usize];
+					let rs2: u64 = registers[self.rs2 as usize];
+					let tmp: u64 = rs1.wrapping_add(rs2);
+
+					registers[self.rd as usize] = tmp;
+				} else {
+					self.name = String::from("sub");
+				}
 			},
 
-			FUNC3_SUB => {
-				self.name = String::from("sub");
+			FUNC3_SLTU => {
+				self.name = String::from("sltu");
 			},
 
 			_ => (),
