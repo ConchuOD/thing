@@ -193,6 +193,15 @@ impl Insn
 					registers[self.rd as usize] = tmp;
 				} else {
 					self.name = String::from("sub");
+					// SUB subtracts the value in rs2 from rs1
+					// and stores the result in rd
+					// overflows are ignored, the lower XLEN bits
+					// get written
+					let rs1: u64 = registers[self.rs1 as usize];
+					let rs2: u64 = registers[self.rs2 as usize];
+					let tmp: u64 = rs1.wrapping_sub(rs2);
+
+					registers[self.rd as usize] = tmp;
 				}
 			},
 
