@@ -4,13 +4,13 @@
 #[derive(PartialEq)]
 pub enum InsnType
 {
-	InvalidType,
-	RType,
-	IType,
-	SType,
-	BType,
-	UType,
-	JType,
+	Invalid,
+	R,
+	I,
+	S,
+	B,
+	U,
+	J,
 }
 
 pub struct Insn
@@ -95,7 +95,7 @@ impl Default for Insn
 			rs2: 0x0,
 			imm: 0x0,
 			func3: 0x0,
-			insn_type: InsnType::InvalidType,
+			insn_type: InsnType::Invalid,
 		};
 	}
 }
@@ -108,31 +108,31 @@ impl Insn
 
 		match self.opcode {
 			OPCODE_LUI | OPCODE_AUIPC => {
-				self.insn_type = InsnType::UType;
+				self.insn_type = InsnType::U;
 			},
 
 			OPCODE_JAL => {
-				self.insn_type = InsnType::JType;
+				self.insn_type = InsnType::J;
 			},
 
 			OPCODE_ARITHI => {
-				self.insn_type = InsnType::IType;
+				self.insn_type = InsnType::I;
 			},
 
 			OPCODE_ARITHR => {
-				self.insn_type = InsnType::RType;
+				self.insn_type = InsnType::R;
 			},
 
 			_ => println!("unknown opcode {:?}", self.opcode),
 		}
 
 		match self.insn_type {
-			InsnType::UType => {
+			InsnType::U => {
 				self.imm = (input & IMM_MASK_UTYPE) as i32;
 				self.rd = input & RD_MASK >> RD_SHIFT;
 			},
 
-			InsnType::IType => {
+			InsnType::I => {
 				self.imm = ((input & IMM_MASK_ITYPE) >> IMM_SHIFT_ITYPE) as i32;
 				self.rd = (input & RD_MASK) >> RD_SHIFT;
 				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
@@ -206,7 +206,7 @@ impl Insn
 
 	pub fn handle(&mut self, registers: &mut [u64], pc: &mut u64)
 	{
-		if self.insn_type == InsnType::InvalidType {
+		if self.insn_type == InsnType::Invalid {
 			*pc += 4;
 			println!("unimplemented instruction {:x}", self.opcode);
 			return;
