@@ -19,7 +19,7 @@ struct Args
 
 fn u8s_to_insn(input: &[u8; 4]) -> u32
 {
-	((input[0] as u32) << 0)
+	return (input[0] as u32)
 		| ((input[1] as u32) << 8)
 		| ((input[2] as u32) << 16)
 		| ((input[3] as u32) << 24)
@@ -34,7 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 	let mut hart: hart::Hart = hart::Hart::default();
 
 	let entry_point: usize = 0x164;
-	let insn_start: usize = 0xe8;
+	let _insn_start: usize = 0xe8;
 
 	// fe010113
 	hart.pc = entry_point as u64;
