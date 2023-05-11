@@ -36,7 +36,8 @@ const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
 const OPCODE_JAL: u32 = 0b0110_1111;
 
-const OPCODE_ARITH: u32 = 0b0001_0011; // TODO: fix naming
+const OPCODE_ARITHI: u32 = 0b0001_0011; // TODO: fix naming
+const OPCODE_ARITHR: u32 = 0b0011_0011; // TODO: fix naming
 
 const IMM_SHIFT_UTYPE: u32 = 12;
 const IMM_WIDTH_UTYPE: u32 = 20;
@@ -52,6 +53,14 @@ const FUNC3_MASK_ITYPE: u32 =
 	gen_mask!(FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1, FUNC3_SHIFT_ITYPE);
 
 // this should be an enum, right?
+const FUNC3_ADDI: u32 = 0b000;
+const FUNC3_SLTI: u32 = 0b010;
+const FUNC3_SLTIU: u32 = 0b011;
+const FUNC3_XORI: u32 = 0b100;
+const FUNC3_ORI: u32 = 0b110;
+const FUNC3_ANDI: u32 = 0b111;
+
+// this should be an enum, right? (or not, there's dupes!)
 const FUNC3_SLLI: u32 = 0b001;
 const FUNC3_SRLI: u32 = 0b101;
 const FUNC3_SRAI: u32 = 0b101;
@@ -106,8 +115,12 @@ impl Insn
 				self.insn_type = InsnType::JType;
 			},
 
-			OPCODE_ARITH => {
+			OPCODE_ARITHI => {
 				self.insn_type = InsnType::IType;
+			},
+
+			OPCODE_ARITHR => {
+				self.insn_type = InsnType::RType;
 			},
 
 			_ => println!("unknown opcode {:?}", self.opcode),
@@ -130,10 +143,27 @@ impl Insn
 		}
 	}
 
-	fn arith(&mut self, registers: &mut [u64], _pc: &mut u64)
+	fn arith_r(&mut self, _registers: &mut [u64], _pc: &mut u64)
 	{
 		match self.func3 {
 			FUNC3_ADD => {
+				self.name = String::from("add");
+			},
+
+			FUNC3_SUB => {
+				self.name = String::from("sub");
+			},
+
+			_ => (),
+		}
+
+		println!("Found {:}", self.name);
+	}
+
+	fn arith_i(&mut self, registers: &mut [u64], _pc: &mut u64)
+	{
+		match self.func3 {
+			FUNC3_ADDI => {
 				self.name = String::from("addi");
 				// ADDI adds the sign-extended 12-bit immediate
 				// to register rs1. Arithmetic overflow is
@@ -146,8 +176,8 @@ impl Insn
 				registers[self.rd as usize] = tmp;
 			},
 
-			FUNC3_SUB => {
-				self.name = String::from("addi");
+			FUNC3_SLTI => {
+				self.name = String::from("slti");
 			},
 
 			_ => (),
@@ -164,8 +194,10 @@ impl Insn
 			// @Johan: AUIPC is "add upper immediate to program counter"
 			let tmp: i64 = self.imm.try_into().unwrap();
 			registers[self.rd as usize] = pc.wrapping_add_signed(tmp);
-		} else if self.opcode == OPCODE_ARITH {
-			self.arith(registers, pc);
+		} else if self.opcode == OPCODE_ARITHR {
+			self.arith_r(registers, pc);
+		} else if self.opcode == OPCODE_ARITHI {
+			self.arith_i(registers, pc);
 		}
 
 		*pc += 4;
