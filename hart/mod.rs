@@ -38,7 +38,8 @@ pub enum RegisterNames
 	t6,
 }
 
-pub struct Hart {
+pub struct Hart
+{
 	pub registers: [u64; 32],
 	pub pc: u64,
 }
@@ -50,6 +51,6 @@ impl Default for Hart
 		return Hart {
 			registers: [0; 32],
 			pc: 0,
-		}
+		};
 	}
 }
