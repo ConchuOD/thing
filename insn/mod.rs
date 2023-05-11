@@ -152,31 +152,21 @@ impl Insn
 		print!("Found {:}\n", self.name);
 	}
 
-	fn do_insn(&mut self, registers: &mut [u64], pc: &mut u64)
+	pub fn handle(&mut self, registers: &mut [u64], pc: &mut u64)
 	{
 		if self.opcode == OPCODE_AUIPC {
 			self.name = String::from("auipc");
-			print!("Found {:}\n", self.name);
+			println!("Found {:}", self.name);
 			// @Johan: AUIPC is "add upper immediate to program counter"
 			let tmp: i64 = self.imm.try_into().unwrap();
 			registers[self.rd as usize] = pc.wrapping_add_signed(tmp);
 		} else if self.opcode == OPCODE_ARITH {
 			self.arith(registers, pc);
-		}
+		} else {
+			println!("unimplemented instruction {:x}", self.opcode);
+        }
 
 		*pc += 4;
-		return;
-	}
-
-	pub fn handle(&mut self, registers: &mut [u64], pc: &mut u64)
-	{
-		if self.insn_type == InsnType::InvalidType {
-			*pc += 4;
-			print!("unimplemented instruction {:x}\n", self.opcode);
-			return;
-		}
-
-		self.do_insn(registers, pc);
 
 		return;
 	}
