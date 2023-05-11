@@ -37,8 +37,8 @@ const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
 const OPCODE_JAL: u32 = 0b0110_1111;
 
-const OPCODE_ARITHI: u32 = 0b0001_0011; // TODO: fix naming
-const OPCODE_ARITHR: u32 = 0b0011_0011; // TODO: fix naming
+const OPCODE_INT_REG_IMM: u32 = 0b0001_0011;
+const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
 
 const IMM_SHIFT_UTYPE: u32 = 12;
 const IMM_WIDTH_UTYPE: u32 = 20;
@@ -140,11 +140,11 @@ impl Insn
 				self.insn_type = InsnType::J;
 			},
 
-			OPCODE_ARITHI => {
+			OPCODE_INT_REG_IMM => {
 				self.insn_type = InsnType::I;
 			},
 
-			OPCODE_ARITHR => {
+			OPCODE_INT_REG_REG => {
 				self.insn_type = InsnType::R;
 			},
 
@@ -176,7 +176,7 @@ impl Insn
 		}
 	}
 
-	fn arith_r(&mut self, registers: &mut [u64], _pc: &mut u64)
+	fn handle_int_reg_reg_insn(&mut self, registers: &mut [u64], _pc: &mut u64)
 	{
 		match self.func3 {
 			FUNC3_ADD => {
@@ -215,7 +215,7 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
-	fn arith_i(&mut self, registers: &mut [u64], _pc: &mut u64)
+	fn handle_int_reg_imm_insn(&mut self, registers: &mut [u64], _pc: &mut u64)
 	{
 		match self.func3 {
 			FUNC3_ADDI => {
@@ -249,10 +249,10 @@ impl Insn
 			// @Johan: AUIPC is "add upper immediate to program counter"
 			let tmp: i64 = self.imm.try_into().unwrap();
 			registers[self.rd as usize] = pc.wrapping_add_signed(tmp);
-		} else if self.opcode == OPCODE_ARITHR {
-			self.arith_r(registers, pc);
-		} else if self.opcode == OPCODE_ARITHI {
-			self.arith_i(registers, pc);
+		} else if self.opcode == OPCODE_INT_REG_REG {
+			self.handle_int_reg_reg_insn(registers, pc);
+		} else if self.opcode == OPCODE_INT_REG_IMM {
+			self.handle_int_reg_imm_insn(registers, pc);
 		} else {
 			println!("unimplemented instruction {:x}", self.opcode);
 		}
