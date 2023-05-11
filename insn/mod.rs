@@ -4,13 +4,13 @@
 #[derive(PartialEq)]
 pub enum InsnType
 {
-	InvalidType,
-	RType,
-	IType,
-	SType,
-	BType,
-	UType,
-	JType,
+	Invalid,
+	R,
+	I,
+	S,
+	B,
+	U,
+	J,
 }
 
 pub struct Insn
@@ -27,7 +27,7 @@ pub struct Insn
 
 macro_rules! gen_mask {
 	($h:expr, $l:expr) => {
-		(((!0) - (1_u32.wrapping_shl($l)) + 1) & (!0 & (!0_32 >> (32 - 1 - ($h)) as u32)))
+		(((!0) - (1_u32.wrapping_shl($l)) + 1) & (!0 & (!0_u32 >> (32 - 1 - ($h)) as u32)))
 	};
 }
 
@@ -36,7 +36,8 @@ const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
 const OPCODE_JAL: u32 = 0b0110_1111;
 
-const OPCODE_ARITH: u32 = 0b0001_0011; // TODO: fix naming
+const OPCODE_ARITHI: u32 = 0b0001_0011; // TODO: fix naming
+const OPCODE_ARITHR: u32 = 0b0011_0011; // TODO: fix naming
 
 const IMM_SHIFT_UTYPE: u32 = 12;
 const IMM_WIDTH_UTYPE: u32 = 20;
@@ -52,6 +53,14 @@ const FUNC3_MASK_ITYPE: u32 =
 	gen_mask!(FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1, FUNC3_SHIFT_ITYPE);
 
 // this should be an enum, right?
+const FUNC3_ADDI: u32 = 0b000;
+const FUNC3_SLTI: u32 = 0b010;
+const FUNC3_SLTIU: u32 = 0b011;
+const FUNC3_XORI: u32 = 0b100;
+const FUNC3_ORI: u32 = 0b110;
+const FUNC3_ANDI: u32 = 0b111;
+
+// this should be an enum, right? (or not, there's dupes!)
 const FUNC3_SLLI: u32 = 0b001;
 const FUNC3_SRLI: u32 = 0b101;
 const FUNC3_SRAI: u32 = 0b101;
@@ -86,7 +95,7 @@ impl Default for Insn
 			rs2: 0x0,
 			imm: 0x0,
 			func3: 0x0,
-			insn_type: InsnType::InvalidType,
+			insn_type: InsnType::Invalid,
 		};
 	}
 }
@@ -99,27 +108,31 @@ impl Insn
 
 		match self.opcode {
 			OPCODE_LUI | OPCODE_AUIPC => {
-				self.insn_type = InsnType::UType;
+				self.insn_type = InsnType::U;
 			},
 
 			OPCODE_JAL => {
-				self.insn_type = InsnType::JType;
+				self.insn_type = InsnType::J;
 			},
 
-			OPCODE_ARITH => {
-				self.insn_type = InsnType::IType;
+			OPCODE_ARITHI => {
+				self.insn_type = InsnType::I;
 			},
 
-			_ => print!("unknown opcode {:?}\n", self.opcode),
+			OPCODE_ARITHR => {
+				self.insn_type = InsnType::R;
+			},
+
+			_ => println!("unknown opcode {:?}", self.opcode),
 		}
 
 		match self.insn_type {
-			InsnType::UType => {
+			InsnType::U => {
 				self.imm = (input & IMM_MASK_UTYPE) as i32;
 				self.rd = input & RD_MASK >> RD_SHIFT;
 			},
 
-			InsnType::IType => {
+			InsnType::I => {
 				self.imm = ((input & IMM_MASK_ITYPE) >> IMM_SHIFT_ITYPE) as i32;
 				self.rd = (input & RD_MASK) >> RD_SHIFT;
 				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
@@ -130,10 +143,27 @@ impl Insn
 		}
 	}
 
-	fn arith(&mut self, registers: &mut [u64], pc: &mut u64)
+	fn arith_r(&mut self, _registers: &mut [u64], _pc: &mut u64)
 	{
 		match self.func3 {
 			FUNC3_ADD => {
+				self.name = String::from("add");
+			},
+
+			FUNC3_SUB => {
+				self.name = String::from("sub");
+			},
+
+			_ => (),
+		}
+
+		println!("Found {:}", self.name);
+	}
+
+	fn arith_i(&mut self, registers: &mut [u64], _pc: &mut u64)
+	{
+		match self.func3 {
+			FUNC3_ADDI => {
 				self.name = String::from("addi");
 				// ADDI adds the sign-extended 12-bit immediate
 				// to register rs1. Arithmetic overflow is
@@ -146,10 +176,14 @@ impl Insn
 				registers[self.rd as usize] = tmp;
 			},
 
+			FUNC3_SLTI => {
+				self.name = String::from("slti");
+			},
+
 			_ => (),
 		}
 
-		print!("Found {:}\n", self.name);
+		println!("Found {:}", self.name);
 	}
 
 	pub fn handle(&mut self, registers: &mut [u64], pc: &mut u64)
@@ -160,11 +194,13 @@ impl Insn
 			// @Johan: AUIPC is "add upper immediate to program counter"
 			let tmp: i64 = self.imm.try_into().unwrap();
 			registers[self.rd as usize] = pc.wrapping_add_signed(tmp);
-		} else if self.opcode == OPCODE_ARITH {
-			self.arith(registers, pc);
+		} else if self.opcode == OPCODE_ARITHR {
+			self.arith_r(registers, pc);
+		} else if self.opcode == OPCODE_ARITHI {
+			self.arith_i(registers, pc);
 		} else {
 			println!("unimplemented instruction {:x}", self.opcode);
-        }
+		}
 
 		*pc += 4;
 
