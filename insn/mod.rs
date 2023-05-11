@@ -27,7 +27,7 @@ pub struct Insn
 
 macro_rules! gen_mask {
 	($h:expr, $l:expr) => {
-		(((!0) - (1_u32.wrapping_shl($l)) + 1) & (!0 & (!0_32 >> (32 - 1 - ($h)) as u32)))
+		(((!0) - (1_u32.wrapping_shl($l)) + 1) & (!0 & (!0_u32 >> (32 - 1 - ($h)) as u32)))
 	};
 }
 
