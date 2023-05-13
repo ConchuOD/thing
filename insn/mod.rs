@@ -27,8 +27,8 @@ pub struct Insn
 }
 
 macro_rules! gen_mask {
-	($h:expr, $l:expr) => {
-		(((!0) - (1_u32.wrapping_shl($l)) + 1) & (!0 & (!0_u32 >> (32 - 1 - ($h)) as u32)))
+	($h:expr, $l:expr, $typ:ty) => {
+		(((!0) - (1_u64.wrapping_shl($l)) + 1) & (!0 & (!0_u64 >> (64 - 1 - ($h)) as u64))) as $typ
 	};
 }
 
@@ -37,23 +37,46 @@ const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
 const OPCODE_JAL: u32 = 0b0110_1111;
 
+const OPCODE_STORE: u32 = 0b0100011;
+const OPCODE_LOAD: u32 = 0b0000011;
+
 const OPCODE_INT_REG_IMM: u32 = 0b0001_0011;
 const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
 
+const RD_SHIFT: u32 = 7;
+const RD_WIDTH: u32 = 5;
+const RD_MASK: u32 = gen_mask!(RD_SHIFT + RD_WIDTH - 1, RD_SHIFT, u32);
+
+const RS1_SHIFT: u32 = 15;
+const RS1_WIDTH: u32 = 5;
+const RS1_MASK: u32 = gen_mask!(RS1_SHIFT + RS1_WIDTH - 1, RS1_SHIFT, u32);
+
+const RS2_SHIFT: u32 = 20;
+const RS2_WIDTH: u32 = 5;
+const RS2_MASK: u32 = gen_mask!(RS2_SHIFT + RS2_WIDTH - 1, RS2_SHIFT, u32);
+
 const IMM_SHIFT_UTYPE: u32 = 12;
 const IMM_WIDTH_UTYPE: u32 = 20;
-const IMM_MASK_UTYPE: u32 = gen_mask!(IMM_SHIFT_UTYPE + IMM_WIDTH_UTYPE - 1, IMM_SHIFT_UTYPE);
+const IMM_MASK_UTYPE: u32 = gen_mask!(IMM_SHIFT_UTYPE + IMM_WIDTH_UTYPE - 1, IMM_SHIFT_UTYPE, u32);
 
 const IMM_SHIFT_ITYPE: u32 = 20;
 const IMM_WIDTH_ITYPE: u32 = 12;
-const IMM_MASK_ITYPE: u32 = gen_mask!(IMM_SHIFT_ITYPE + IMM_WIDTH_ITYPE - 1, IMM_SHIFT_ITYPE);
+const IMM_MASK_ITYPE: u32 = gen_mask!(IMM_SHIFT_ITYPE + IMM_WIDTH_ITYPE - 1, IMM_SHIFT_ITYPE, u32);
+
+const IMM_SHIFT_STYPE: u32 = RD_SHIFT;
+const IMM_WIDTH_STYPE: u32 = RD_WIDTH;
+const IMM_MASK_STYPE: u32 = gen_mask!(IMM_SHIFT_STYPE + IMM_WIDTH_STYPE - 1, IMM_SHIFT_STYPE, u32);
+
+const IMM2_SHIFT_STYPE: u32 = 25;
+const IMM2_WIDTH_STYPE: u32 = 7;
+const IMM2_MASK_STYPE: u32 = gen_mask!(IMM2_SHIFT_STYPE + IMM2_WIDTH_STYPE - 1, IMM2_SHIFT_STYPE, u32);
 
 const FUNC3_SHIFT_ITYPE: u32 = 12;
 const FUNC3_WIDTH_ITYPE: u32 = 3;
 const FUNC3_MASK_ITYPE: u32 =
-	gen_mask!(FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1, FUNC3_SHIFT_ITYPE);
+	gen_mask!(FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1, FUNC3_SHIFT_ITYPE, u32);
 
-// this should be an enum, right?
+// this should be an enum, right? (or not, there's dupes!)
 const FUNC3_ADDI: u32 = 0b000;
 const FUNC3_SLTI: u32 = 0b010;
 const FUNC3_SLTIU: u32 = 0b011;
@@ -61,7 +84,6 @@ const FUNC3_XORI: u32 = 0b100;
 const FUNC3_ORI: u32 = 0b110;
 const FUNC3_ANDI: u32 = 0b111;
 
-// this should be an enum, right? (or not, there's dupes!)
 const FUNC3_SLLI: u32 = 0b001;
 const FUNC3_SRLI: u32 = 0b101;
 const FUNC3_SRAI: u32 = 0b101;
@@ -76,10 +98,19 @@ const FUNC3_SRA: u32 = 0b101;
 const FUNC3_OR: u32 = 0b110;
 const FUNC3_AND: u32 = 0b111;
 
-const FUNC7_SHIFT_ITYPE: u32 = 25;
-const FUNC7_WIDTH_ITYPE: u32 = 7;
-const FUNC7_MASK_ITYPE: u32 =
-	gen_mask!(FUNC7_SHIFT_ITYPE + FUNC7_WIDTH_ITYPE - 1, FUNC7_SHIFT_ITYPE);
+const FUNC3_SB: u32 = 0b000;
+const FUNC3_SH: u32 = 0b001;
+const FUNC3_SW: u32 = 0b010;
+const FUNC3_SD: u32 = 0b011;
+
+const FUNC3_LB: u32 = 0b000;
+const FUNC3_LH: u32 = 0b001;
+const FUNC3_LW: u32 = 0b010;
+const FUNC3_LD: u32 = 0b011;
+
+const FUNC7_SHIFT_ITYPE: u32 = IMM2_SHIFT_STYPE;
+const FUNC7_WIDTH_ITYPE: u32 = IMM2_WIDTH_STYPE;
+const FUNC7_MASK_ITYPE: u32 = IMM2_MASK_STYPE;
 
 const FUNC7_SLLI: u32 = 0b0000000;
 const FUNC7_SRLI: u32 = 0b0000000;
@@ -94,18 +125,6 @@ const FUNC7_SRL: u32 = 0b0000000;
 const FUNC7_SRA: u32 = 0b0100000;
 const FUNC7_OR: u32 = 0b0000000;
 const FUNC7_AND: u32 = 0b0000000;
-
-const RD_SHIFT: u32 = 7;
-const RD_WIDTH: u32 = 5;
-const RD_MASK: u32 = gen_mask!(RD_SHIFT + RD_WIDTH - 1, RD_SHIFT);
-
-const RS1_SHIFT: u32 = 15;
-const RS1_WIDTH: u32 = 5;
-const RS1_MASK: u32 = gen_mask!(RS1_SHIFT + RS1_WIDTH - 1, RS1_SHIFT);
-
-const RS2_SHIFT: u32 = 20;
-const RS2_WIDTH: u32 = 5;
-const RS2_MASK: u32 = gen_mask!(RS2_SHIFT + RS2_WIDTH - 1, RS2_SHIFT);
 
 impl Default for Insn
 {
@@ -148,6 +167,13 @@ impl Insn
 				self.insn_type = InsnType::R;
 			},
 
+			OPCODE_LOAD => {
+				self.insn_type = InsnType::S;
+			},
+
+			OPCODE_STORE => {
+				self.insn_type = InsnType::S;
+			},
 			_ => println!("unknown opcode {:?}", self.opcode),
 		}
 
@@ -170,6 +196,16 @@ impl Insn
 				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
 				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
 				self.func7 = (input & FUNC7_MASK_ITYPE) >> FUNC7_SHIFT_ITYPE;
+			},
+
+			InsnType::S => {
+				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
+				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
+				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
+
+				let lower_imm = (input & IMM_MASK_STYPE) >> IMM_SHIFT_STYPE;
+				let upper_imm = (input & IMM2_MASK_STYPE) >> IMM2_SHIFT_STYPE;
+				self.imm = ((upper_imm << IMM_WIDTH_STYPE) | lower_imm) as i32;
 			},
 
 			_ => (),
@@ -241,20 +277,103 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
+	fn handle_store_insn(&mut self, registers: &mut [u64], _pc: &mut u64)
+	{
+		let mut memory: [u64; 1_000_000] = [0; 1_000_000];
+
+		// These are all store instructions of varied widths
+		match self.func3 {
+			FUNC3_SD => {
+				self.name = String::from("sd");
+				memory[self.rd as usize] = registers[self.rs2 as usize];
+			},
+
+			FUNC3_SW => {
+				self.name = String::from("sw");
+				memory[self.rd as usize] &= gen_mask!(63, 32, u64);
+				memory[self.rd as usize] |= registers[self.rs2 as usize];
+			},
+
+			FUNC3_SH => {
+				self.name = String::from("sh");
+				memory[self.rd as usize] &= gen_mask!(63, 16, u64);
+				memory[self.rd as usize] = registers[self.rs2 as usize];
+			},
+
+			FUNC3_SB => {
+				self.name = String::from("sb");
+				memory[self.rd as usize] &= gen_mask!(63, 8, u64);
+				memory[self.rd as usize] = registers[self.rs2 as usize];
+			},
+
+			_ => (),
+		}
+
+		println!("Found {:}", self.name);
+	}
+
+	fn handle_load_insn(&mut self, registers: &mut [u64], _pc: &mut u64)
+	{
+		let mut memory: [u64; 1_000_000] = [0; 1_000_000];
+
+		// These are all store instructions of varied widths
+		match self.func3 {
+			FUNC3_LD => {
+				self.name = String::from("ld");
+				memory[self.rd as usize] = registers[self.rs2 as usize];
+			},
+
+			FUNC3_LW => {
+				self.name = String::from("lw");
+				registers[self.rs2 as usize] = memory[self.rd as usize] & gen_mask!(31, 0, u64);
+			},
+
+			FUNC3_LH => {
+				self.name = String::from("lh");
+				registers[self.rd as usize] = memory[self.rs2 as usize] & gen_mask!(15, 0, u64);
+			},
+
+			FUNC3_LB => {
+				self.name = String::from("lb");
+				registers[self.rd as usize] = memory[self.rs2 as usize] & gen_mask!(7, 0, u64);
+			},
+
+			_ => (),
+		}
+
+		println!("Found {:}", self.name);
+	}
+
 	pub fn handle(&mut self, registers: &mut [u64], pc: &mut u64)
 	{
-		if self.opcode == OPCODE_AUIPC {
-			self.name = String::from("auipc");
-			println!("Found {:}", self.name);
-			// @Johan: AUIPC is "add upper immediate to program counter"
-			let tmp: i64 = self.imm.try_into().unwrap();
-			registers[self.rd as usize] = pc.wrapping_add_signed(tmp);
-		} else if self.opcode == OPCODE_INT_REG_REG {
-			self.handle_int_reg_reg_insn(registers, pc);
-		} else if self.opcode == OPCODE_INT_REG_IMM {
-			self.handle_int_reg_imm_insn(registers, pc);
-		} else {
-			println!("unimplemented instruction {:x}", self.opcode);
+		match self.opcode {
+			OPCODE_AUIPC => {
+				self.name = String::from("auipc");
+				println!("Found {:}", self.name);
+				// @Johan: AUIPC is "add upper immediate to program counter"
+				let tmp: i64 = self.imm.try_into().unwrap();
+				registers[self.rd as usize] = pc.wrapping_add_signed(tmp);
+			},
+
+			OPCODE_INT_REG_REG => {
+				self.handle_int_reg_reg_insn(registers, pc);
+			},
+
+			OPCODE_INT_REG_IMM => {
+				self.handle_int_reg_imm_insn(registers, pc);
+			},
+
+			OPCODE_STORE => {
+				self.handle_store_insn(registers, pc);
+			},
+
+			OPCODE_LOAD => {
+				self.handle_load_insn(registers, pc);
+			},
+
+			_ => {
+				println!("unimplemented instruction {:x}", self.opcode);
+			},
 		}
 
 		*pc += 4;
