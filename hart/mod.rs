@@ -42,6 +42,7 @@ pub struct Hart
 {
 	pub registers: [u64; 32],
 	pub pc: u64,
+	pub memory: [u64; 100], //TODO: clearly 100 is insufficient
 }
 
 impl Default for Hart
@@ -51,6 +52,30 @@ impl Default for Hart
 		return Hart {
 			registers: [0; 32],
 			pc: 0,
+			memory: [0; 100],
 		};
+	}
+}
+
+impl Hart
+{
+	pub fn write_register(&mut self, offset: usize, value: u64)
+	{
+		self.registers[offset] = value;
+	}
+
+	pub fn read_register(&mut self, offset: usize) -> u64
+	{
+		return self.registers[offset];
+	}
+
+	pub fn write_memory(&mut self, address: usize, value: u64)
+	{
+		self.registers[address] = value;
+	}
+
+	pub fn read_memory(&mut self, address: usize) -> u64
+	{
+		return self.registers[address];
 	}
 }

@@ -1,6 +1,8 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
+use crate::hart;
+
 #[derive(PartialEq)]
 pub enum InsnType
 {
@@ -212,7 +214,7 @@ impl Insn
 		}
 	}
 
-	fn handle_int_reg_reg_insn(&mut self, registers: &mut [u64], _pc: &mut u64)
+	fn handle_int_reg_reg_insn(&mut self, hart: &mut hart::Hart)
 	{
 		match self.func3 {
 			FUNC3_ADD => {
@@ -222,22 +224,22 @@ impl Insn
 					// the result in rd
 					// overflows are ignored, the lower XLEN bits
 					// get written
-					let rs1: u64 = registers[self.rs1 as usize];
-					let rs2: u64 = registers[self.rs2 as usize];
+					let rs1: u64 = hart.read_register(self.rs1 as usize);
+					let rs2: u64 = hart.read_register(self.rs2 as usize);
 					let tmp: u64 = rs1.wrapping_add(rs2);
 
-					registers[self.rd as usize] = tmp;
+					hart.write_register(self.rd as usize, tmp);
 				} else {
 					self.name = String::from("sub");
 					// SUB subtracts the value in rs2 from rs1
 					// and stores the result in rd
 					// overflows are ignored, the lower XLEN bits
 					// get written
-					let rs1: u64 = registers[self.rs1 as usize];
-					let rs2: u64 = registers[self.rs2 as usize];
+					let rs1: u64 = hart.read_register(self.rs1 as usize);
+					let rs2: u64 = hart.read_register(self.rs2 as usize);
 					let tmp: u64 = rs1.wrapping_sub(rs2);
 
-					registers[self.rd as usize] = tmp;
+					hart.write_register(self.rd as usize, tmp);
 				}
 			},
 
@@ -251,7 +253,7 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
-	fn handle_int_reg_imm_insn(&mut self, registers: &mut [u64], _pc: &mut u64)
+	fn handle_int_reg_imm_insn(&mut self, hart: &mut hart::Hart)
 	{
 		match self.func3 {
 			FUNC3_ADDI => {
@@ -260,11 +262,11 @@ impl Insn
 				// to register rs1. Arithmetic overflow is
 				// ignored and the result is simply the low XLEN
 				// bits of the result.
-				let mut tmp: u64 = registers[self.rs1 as usize];
+				let mut tmp: u64 = hart.read_register(self.rs1 as usize);
 				let mut imm: i64 = self.imm.try_into().unwrap();
 				imm = imm.wrapping_shl(52).wrapping_shr(52);
 				tmp = tmp.wrapping_add_signed(imm);
-				registers[self.rd as usize] = tmp;
+				hart.write_register(self.rd as usize, tmp);
 			},
 
 			FUNC3_SLTI => {
@@ -277,33 +279,39 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
-	fn handle_store_insn(&mut self, registers: &mut [u64], _pc: &mut u64)
+	fn handle_store_insn(&mut self, hart: &mut hart::Hart)
 	{
-		let mut memory: [u64; 1_000_000] = [0; 1_000_000];
-
 		// These are all store instructions of varied widths
+		// TODO: the register needs to be masked too
 		match self.func3 {
 			FUNC3_SD => {
 				self.name = String::from("sd");
-				memory[self.rd as usize] = registers[self.rs2 as usize];
+				let tmp: u64 = hart.read_memory(self.rd as usize);
+				hart.write_memory(self.rd as usize, tmp);
 			},
 
 			FUNC3_SW => {
 				self.name = String::from("sw");
-				memory[self.rd as usize] &= gen_mask!(63, 32, u64);
-				memory[self.rd as usize] |= registers[self.rs2 as usize];
+				let mut tmp: u64 = hart.read_memory(self.rd as usize);
+				tmp &= gen_mask!(63, 32, u64);
+				tmp |= hart.read_register(self.rs2 as usize);
+				hart.write_memory(self.rd as usize, tmp);
 			},
 
 			FUNC3_SH => {
 				self.name = String::from("sh");
-				memory[self.rd as usize] &= gen_mask!(63, 16, u64);
-				memory[self.rd as usize] = registers[self.rs2 as usize];
+				let mut tmp: u64 = hart.read_memory(self.rd as usize);
+				tmp &= gen_mask!(63, 16, u64);
+				tmp |= hart.read_register(self.rs2 as usize);
+				hart.write_memory(self.rd as usize, tmp);
 			},
 
 			FUNC3_SB => {
 				self.name = String::from("sb");
-				memory[self.rd as usize] &= gen_mask!(63, 8, u64);
-				memory[self.rd as usize] = registers[self.rs2 as usize];
+				let mut tmp: u64 = hart.read_memory(self.rd as usize);
+				tmp &= gen_mask!(63, 8, u64);
+				tmp |= hart.read_register(self.rs2 as usize);
+				hart.write_memory(self.rd as usize, tmp);
 			},
 
 			_ => (),
@@ -312,30 +320,32 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
-	fn handle_load_insn(&mut self, registers: &mut [u64], _pc: &mut u64)
+	fn handle_load_insn(&mut self, hart: &mut hart::Hart)
 	{
-		let mut memory: [u64; 1_000_000] = [0; 1_000_000];
-
 		// These are all store instructions of varied widths
 		match self.func3 {
 			FUNC3_LD => {
 				self.name = String::from("ld");
-				memory[self.rd as usize] = registers[self.rs2 as usize];
+				let tmp: u64 = hart.read_memory(self.rd as usize);
+				hart.write_register(self.rd as usize, tmp);
 			},
 
 			FUNC3_LW => {
 				self.name = String::from("lw");
-				registers[self.rs2 as usize] = memory[self.rd as usize] & gen_mask!(31, 0, u64);
+				let tmp: u64 = hart.read_memory(self.rd as usize) & gen_mask!(31, 0, u64);
+				hart.write_register(self.rs2 as usize, tmp);
 			},
 
 			FUNC3_LH => {
 				self.name = String::from("lh");
-				registers[self.rd as usize] = memory[self.rs2 as usize] & gen_mask!(15, 0, u64);
+				let tmp: u64 = hart.read_memory(self.rs2 as usize) & gen_mask!(15, 0, u64);
+				hart.write_register(self.rs2 as usize, tmp);
 			},
 
 			FUNC3_LB => {
 				self.name = String::from("lb");
-				registers[self.rd as usize] = memory[self.rs2 as usize] & gen_mask!(7, 0, u64);
+				let tmp: u64 = hart.read_memory(self.rs2 as usize) & gen_mask!(7, 0, u64);
+				hart.write_register(self.rs2 as usize, tmp);
 			},
 
 			_ => (),
@@ -344,31 +354,32 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
-	pub fn handle(&mut self, registers: &mut [u64], pc: &mut u64)
+	pub fn handle(&mut self, hart: &mut hart::Hart)
 	{
 		match self.opcode {
 			OPCODE_AUIPC => {
+				let mut registers = hart.registers;
 				self.name = String::from("auipc");
 				println!("Found {:}", self.name);
 				// @Johan: AUIPC is "add upper immediate to program counter"
 				let tmp: i64 = self.imm.try_into().unwrap();
-				registers[self.rd as usize] = pc.wrapping_add_signed(tmp);
+				registers[self.rd as usize] = hart.pc.wrapping_add_signed(tmp);
 			},
 
 			OPCODE_INT_REG_REG => {
-				self.handle_int_reg_reg_insn(registers, pc);
+				self.handle_int_reg_reg_insn(hart);
 			},
 
 			OPCODE_INT_REG_IMM => {
-				self.handle_int_reg_imm_insn(registers, pc);
+				self.handle_int_reg_imm_insn(hart);
 			},
 
 			OPCODE_STORE => {
-				self.handle_store_insn(registers, pc);
+				self.handle_store_insn(hart);
 			},
 
 			OPCODE_LOAD => {
-				self.handle_load_insn(registers, pc);
+				self.handle_load_insn(hart);
 			},
 
 			_ => {
@@ -376,7 +387,7 @@ impl Insn
 			},
 		}
 
-		*pc += 4;
+		hart.pc += 4;
 
 		return;
 	}

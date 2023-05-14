@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 		let insn: u32 = u8s_to_insn(insn_bits.try_into()?);
 		let mut something: insn::Insn = insn::Insn::from(insn);
 
-		something.handle(&mut hart.registers, &mut hart.pc);
+		something.handle(&mut hart);
 
 		hack += 1;
 		if hack > 20 {
