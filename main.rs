@@ -4,8 +4,8 @@
 use clap::Parser;
 use std::fs;
 
-mod insn;
 mod hart;
+mod insn;
 
 /// thing
 #[derive(Parser, Debug)]
@@ -22,7 +22,7 @@ fn u8s_to_insn(input: &[u8; 4]) -> u32
 	return (input[0] as u32)
 		| ((input[1] as u32) << 8)
 		| ((input[2] as u32) << 16)
-		| ((input[3] as u32) << 24)
+		| ((input[3] as u32) << 24);
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>>
