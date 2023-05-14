@@ -282,7 +282,6 @@ impl Insn
 	fn handle_store_insn(&mut self, hart: &mut hart::Hart)
 	{
 		// These are all store instructions of varied widths
-		// TODO: the register needs to be masked too
 		match self.func3 {
 			FUNC3_SD => {
 				self.name = String::from("sd");
@@ -294,7 +293,7 @@ impl Insn
 				self.name = String::from("sw");
 				let mut tmp: u64 = hart.read_memory(self.rd as usize);
 				tmp &= gen_mask!(63, 32, u64);
-				tmp |= hart.read_register(self.rs2 as usize);
+				tmp |= hart.read_register(self.rs2 as usize) & gen_mask!(31, 0, u64);
 				hart.write_memory(self.rd as usize, tmp);
 			},
 
@@ -302,7 +301,7 @@ impl Insn
 				self.name = String::from("sh");
 				let mut tmp: u64 = hart.read_memory(self.rd as usize);
 				tmp &= gen_mask!(63, 16, u64);
-				tmp |= hart.read_register(self.rs2 as usize);
+				tmp |= hart.read_register(self.rs2 as usize) & gen_mask!(15, 0, u64);
 				hart.write_memory(self.rd as usize, tmp);
 			},
 
@@ -310,7 +309,7 @@ impl Insn
 				self.name = String::from("sb");
 				let mut tmp: u64 = hart.read_memory(self.rd as usize);
 				tmp &= gen_mask!(63, 8, u64);
-				tmp |= hart.read_register(self.rs2 as usize);
+				tmp |= hart.read_register(self.rs2 as usize) & gen_mask!(7, 0, u64);
 				hart.write_memory(self.rd as usize, tmp);
 			},
 
