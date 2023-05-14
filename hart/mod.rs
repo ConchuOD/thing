@@ -42,7 +42,7 @@ pub struct Hart
 {
 	pub registers: [u64; 32],
 	pub pc: u64,
-	pub memory: [u64; 100], //TODO: clearly 100 is insufficient
+	pub memory: [u64; 100], // TODO: clearly 100 is insufficient
 }
 
 impl Default for Hart
