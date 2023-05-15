@@ -1,6 +1,7 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
+use crate::bus::Bus;
 use crate::hart;
 
 #[derive(PartialEq)]
@@ -286,32 +287,26 @@ impl Insn
 		match self.func3 {
 			FUNC3_SD => {
 				self.name = String::from("sd");
-				let tmp: u64 = hart.read_memory(self.rd as usize);
-				hart.write_memory(self.rd as usize, tmp);
+				let tmp: u64 = hart.read(self.rd as usize);
+				hart.write(self.rd as usize, tmp);
 			},
 
 			FUNC3_SW => {
 				self.name = String::from("sw");
-				let mut tmp: u64 = hart.read_memory(self.rd as usize);
-				tmp &= gen_mask!(63, 32, u64);
-				tmp |= hart.read_register(self.rs2 as usize) & gen_mask!(31, 0, u64);
-				hart.write_memory(self.rd as usize, tmp);
+				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(31, 0, u64);
+				hart.write(self.rd as usize, tmp as u32);
 			},
 
 			FUNC3_SH => {
 				self.name = String::from("sh");
-				let mut tmp: u64 = hart.read_memory(self.rd as usize);
-				tmp &= gen_mask!(63, 16, u64);
-				tmp |= hart.read_register(self.rs2 as usize) & gen_mask!(15, 0, u64);
-				hart.write_memory(self.rd as usize, tmp);
+				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(15, 0, u64);
+				hart.write(self.rd as usize, tmp as u16);
 			},
 
 			FUNC3_SB => {
 				self.name = String::from("sb");
-				let mut tmp: u64 = hart.read_memory(self.rd as usize);
-				tmp &= gen_mask!(63, 8, u64);
-				tmp |= hart.read_register(self.rs2 as usize) & gen_mask!(7, 0, u64);
-				hart.write_memory(self.rd as usize, tmp);
+				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(7, 0, u64);
+				hart.write(self.rd as usize, tmp as u8);
 			},
 
 			_ => (),
@@ -326,26 +321,26 @@ impl Insn
 		match self.func3 {
 			FUNC3_LD => {
 				self.name = String::from("ld");
-				let tmp: u64 = hart.read_memory(self.rd as usize);
+				let tmp: u64 = hart.read(self.rd as usize);
 				hart.write_register(self.rd as usize, tmp);
 			},
 
 			FUNC3_LW => {
 				self.name = String::from("lw");
-				let tmp: u64 = hart.read_memory(self.rd as usize) & gen_mask!(31, 0, u64);
-				hart.write_register(self.rs2 as usize, tmp);
+				let tmp: u32 = hart.read(self.rd as usize);
+				hart.write_register(self.rs2 as usize, tmp as u64);
 			},
 
 			FUNC3_LH => {
 				self.name = String::from("lh");
-				let tmp: u64 = hart.read_memory(self.rs2 as usize) & gen_mask!(15, 0, u64);
-				hart.write_register(self.rs2 as usize, tmp);
+				let tmp: u16 = hart.read(self.rs2 as usize);
+				hart.write_register(self.rs2 as usize, tmp as u64);
 			},
 
 			FUNC3_LB => {
 				self.name = String::from("lb");
-				let tmp: u64 = hart.read_memory(self.rs2 as usize) & gen_mask!(7, 0, u64);
-				hart.write_register(self.rs2 as usize, tmp);
+				let tmp: u8 = hart.read(self.rs2 as usize);
+				hart.write_register(self.rs2 as usize, tmp as u64);
 			},
 
 			_ => (),

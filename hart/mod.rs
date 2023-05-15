@@ -2,6 +2,9 @@
 #![allow(clippy::needless_return)]
 #![allow(non_camel_case_types)]
 
+use crate::bus::Bus;
+use crate::lebytes::LeBytes;
+
 pub enum RegisterNames
 {
 	zero,
@@ -38,11 +41,30 @@ pub enum RegisterNames
 	t6,
 }
 
+const MEMORY_BASE: usize = 0x100;
+const MEMORY_SIZE: usize = 0x100; // TODO: clearly 0x100 is insufficient
+const MEMORY_END: usize = MEMORY_BASE + MEMORY_SIZE;
+
+pub struct Memory
+{
+	memory: [u8; MEMORY_SIZE],
+}
+
+impl Default for Memory
+{
+	fn default() -> Memory
+	{
+		return Memory {
+			memory: [0; MEMORY_SIZE],
+		};
+	}
+}
+
 pub struct Hart
 {
 	pub registers: [u64; 32],
 	pub pc: u64,
-	pub memory: [u64; 100], // TODO: clearly 100 is insufficient
+	pub memory: Memory,
 }
 
 impl Default for Hart
@@ -52,8 +74,33 @@ impl Default for Hart
 		return Hart {
 			registers: [0; 32],
 			pc: 0,
-			memory: [0; 100],
+			memory: Memory::default(),
 		};
+	}
+}
+
+impl Bus for Memory
+{
+	fn read<T>(&mut self, address: usize) -> T
+	where
+		T: LeBytes,
+		[(); <T as LeBytes>::SIZE]:,
+	{
+		return T::from_le_bytes(
+			self.memory[address..address + <T as LeBytes>::SIZE - 1]
+				.try_into()
+				.unwrap(),
+		);
+	}
+
+	fn write<T>(&mut self, address: usize, value: T)
+	where
+		T: LeBytes,
+		[(); <T as LeBytes>::SIZE]:,
+	{
+		let tmp: [u8; <T as LeBytes>::SIZE] = value.to_le_bytes();
+		self.memory[address..address + <T as LeBytes>::SIZE - 1]
+			.copy_from_slice(&tmp[..<T as LeBytes>::SIZE - 1]);
 	}
 }
 
@@ -68,14 +115,29 @@ impl Hart
 	{
 		return self.registers[offset];
 	}
+}
 
-	pub fn write_memory(&mut self, address: usize, value: u64)
+impl Bus for Hart
+{
+	fn write<T>(&mut self, address: usize, value: T)
+	where
+		T: LeBytes,
+		[(); <T as LeBytes>::SIZE]:,
 	{
-		self.registers[address] = value;
+		if (MEMORY_BASE..MEMORY_END).contains(&address) {
+			self.memory.write(address, value);
+		}
 	}
 
-	pub fn read_memory(&mut self, address: usize) -> u64
+	fn read<T>(&mut self, address: usize) -> T
+	where
+		T: LeBytes,
+		[(); <T as LeBytes>::SIZE]:,
 	{
-		return self.registers[address];
+		if (MEMORY_BASE..MEMORY_END).contains(&address) {
+			return self.memory.read(address);
+		} else {
+			return T::from_le_bytes([0; <T as LeBytes>::SIZE]);
+		}
 	}
 }
