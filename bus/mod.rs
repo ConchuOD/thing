@@ -5,14 +5,14 @@
 use crate::lebytes::LeBytes;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ErrorKind
 {
 	Unimplemented,
 	OutOfBounds,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Error
 {
 	kind: ErrorKind,
