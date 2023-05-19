@@ -318,30 +318,45 @@ impl Insn
 
 	fn handle_load_insn(&mut self, hart: &mut hart::Hart)
 	{
-		// These are all store instructions of varied widths
+		// These are all load instructions of varied widths.
+		// Loads add a sign-extended 12-bit immediate to rs1, forming
+		// a memory address. The value at this memory address is put in
+		// the register in rd.
 		match self.func3 {
 			FUNC3_LD => {
 				self.name = String::from("ld");
-				let tmp: u64 = hart.read(self.rd as usize).unwrap();
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u64 = hart.read(address as usize).unwrap();
 				hart.write_register(self.rd as usize, tmp);
 			},
 
 			FUNC3_LW => {
 				self.name = String::from("lw");
-				let tmp: u32 = hart.read(self.rd as usize).unwrap();
-				hart.write_register(self.rs2 as usize, tmp as u64);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u32 = hart.read(address as usize).unwrap();
+				hart.write_register(self.rd as usize, tmp as u64);
 			},
 
 			FUNC3_LH => {
 				self.name = String::from("lh");
-				let tmp: u16 = hart.read(self.rs2 as usize).unwrap();
-				hart.write_register(self.rs2 as usize, tmp as u64);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u16 = hart.read(address as usize).unwrap();
+				hart.write_register(self.rd as usize, tmp as u64);
 			},
 
 			FUNC3_LB => {
 				self.name = String::from("lb");
-				let tmp: u8 = hart.read(self.rs2 as usize).unwrap();
-				hart.write_register(self.rs2 as usize, tmp as u64);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u8 = hart.read(address as usize).unwrap();
+				hart.write_register(self.rd as usize, tmp as u64);
 			},
 
 			_ => (),
