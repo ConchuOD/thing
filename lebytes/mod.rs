@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
