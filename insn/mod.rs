@@ -285,29 +285,44 @@ impl Insn
 	fn handle_store_insn(&mut self, hart: &mut hart::Hart)
 	{
 		// These are all store instructions of varied widths
+		// Stores add a sign-extended 12-bit immediate to rs1, forming
+		// a memory address. The value in rs2 is put at this memory
+		// address.
 		match self.func3 {
 			FUNC3_SD => {
 				self.name = String::from("sd");
-				let tmp: u64 = hart.read_register(self.rd as usize);
-				hart.write(self.rd as usize, tmp);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u64 = hart.read_register(self.rs2 as usize);
+				hart.write(address as usize, tmp);
 			},
 
 			FUNC3_SW => {
 				self.name = String::from("sw");
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(31, 0, u64);
-				hart.write(self.rd as usize, tmp as u32);
+				hart.write(address as usize, tmp as u32);
 			},
 
 			FUNC3_SH => {
 				self.name = String::from("sh");
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(15, 0, u64);
-				hart.write(self.rd as usize, tmp as u16);
+				hart.write(address as usize, tmp as u16);
 			},
 
 			FUNC3_SB => {
 				self.name = String::from("sb");
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(7, 0, u64);
-				hart.write(self.rd as usize, tmp as u8);
+				hart.write(address as usize, tmp as u8);
 			},
 
 			_ => (),
