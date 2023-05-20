@@ -260,7 +260,15 @@ impl Insn
 	{
 		match self.func3 {
 			FUNC3_ADDI => {
-				self.name = String::from("addi");
+				if self.imm == 0 && self.rs1 == 0 && self.rd == 0 {
+					self.name = String::from("nop");
+					return;
+				} else if self.imm == 0 {
+					self.name = String::from("mv");
+				} else {
+					self.name = String::from("addi");
+				}
+
 				// ADDI adds the sign-extended 12-bit immediate
 				// to register rs1. Arithmetic overflow is
 				// ignored and the result is simply the low XLEN
