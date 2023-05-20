@@ -139,7 +139,10 @@ impl Bus for Hart
 			return Ok(self.memory.read(address - MEMORY_BASE)?);
 		}
 
-		return Err(BusError::new(BusErrorKind::Unimplemented, &format!("addr: {:}", address)));
+		return Err(BusError::new(
+			BusErrorKind::Unimplemented,
+			&format!("addr: {:}", address),
+		));
 	}
 
 	fn write<T>(&mut self, address: usize, value: T) -> Result<(), BusError>
@@ -151,6 +154,9 @@ impl Bus for Hart
 			return Ok(self.memory.write(address - MEMORY_BASE, value)?);
 		}
 
-		return Err(BusError::new(BusErrorKind::Unimplemented, &format!("addr: {:}", address)));
+		return Err(BusError::new(
+			BusErrorKind::Unimplemented,
+			&format!("addr: {:}", address),
+		));
 	}
 }
