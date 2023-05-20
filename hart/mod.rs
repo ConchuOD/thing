@@ -64,6 +64,7 @@ impl Default for Memory
 pub struct Hart
 {
 	pub registers: [u64; 32],
+	pub csrs: [u64; 4096],
 	pub pc: u64,
 	pub memory: Memory,
 }
@@ -74,6 +75,7 @@ impl Default for Hart
 	{
 		return Hart {
 			registers: [0; 32],
+			csrs: [0; 4096],
 			pc: 0,
 			memory: Memory::default(),
 		};
@@ -127,15 +129,14 @@ impl Hart
 		return self.registers[offset];
 	}
 
-	pub fn write_csr(&mut self, _offset: usize, _value: u64)
+	pub fn write_csr(&mut self, offset: usize, value: u64)
 	{
-		println!("Unimplemented csr write");
+		self.csrs[offset] = value;
 	}
 
-	pub fn read_csr(&mut self, _offset: usize) -> u64
+	pub fn read_csr(&mut self, offset: usize) -> u64
 	{
-		println!("Unimplemented csr read");
-		return 0_u64;
+		return self.registers[offset];
 	}
 }
 
