@@ -436,15 +436,23 @@ impl Insn
 			},
 
 			FUNC3_CSRRS => {
-				// CSRRW reads the old value of the CSR,
-				// zero-extends the value to XLEN bits,
-				// then writes it to integer register rd.
-				// The initial value in rs1 is written to
-				// the CSR. If rd=x0, then the instruction
-				// shall not read the CSR and shall not cause
-				// any of the side effects that might occur on
-				// a CSR read
+				// Quoting the spec:
+				// CSRRS reads the value of the CSR, zero
+				// extends the value to XLEN bits, and writes
+				// it to integer register rd. The initial value
+				// in integer register rs1 is treated as a bit
+				// mask that specifies bit positions to be set
+				// in the CSR. Any bit that is high in rs1 will
+				// cause the corresponding bit to be set in the
+				// CSR, if that CSR bit is writable.
 				self.name = String::from("csrws");
+				let mut csr_val: u64 = hart.read_csr(self.imm as usize);
+				hart.write_register(self.rd as usize, csr_val);
+				if self.rs1 != 0 {
+					let mask = hart.read_register(self.rs1 as usize);
+					csr_val &= mask;
+					hart.write_csr(self.imm as usize, csr_val);
+				}
 			},
 
 			_ => (),
