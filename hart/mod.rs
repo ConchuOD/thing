@@ -88,7 +88,7 @@ impl Bus for Memory
 		[(); <T as LeBytes>::SIZE]:,
 	{
 		return Ok(T::from_le_bytes(
-			self.memory[address..address + <T as LeBytes>::SIZE - 1]
+			self.memory[address..address + <T as LeBytes>::SIZE]
 				.try_into()
 				.unwrap(),
 		));
@@ -100,8 +100,8 @@ impl Bus for Memory
 		[(); <T as LeBytes>::SIZE]:,
 	{
 		let tmp: [u8; <T as LeBytes>::SIZE] = value.to_le_bytes();
-		self.memory[address..address + <T as LeBytes>::SIZE - 1]
-			.copy_from_slice(&tmp[..<T as LeBytes>::SIZE - 1]);
+		self.memory[address..address + <T as LeBytes>::SIZE]
+			.copy_from_slice(&tmp[..<T as LeBytes>::SIZE]);
 
 		return Ok(());
 	}
