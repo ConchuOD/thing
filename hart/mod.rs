@@ -42,8 +42,8 @@ pub enum RegisterNames
 	t6,
 }
 
-const MEMORY_BASE: usize = 0x100;
-const MEMORY_SIZE: usize = 0x100; // TODO: clearly 0x100 is insufficient
+const MEMORY_BASE: usize = 0x0;
+const MEMORY_SIZE: usize = 0x1000; // TODO: clearly 0x1000 is insufficient
 const MEMORY_END: usize = MEMORY_BASE + MEMORY_SIZE;
 
 pub struct Memory
