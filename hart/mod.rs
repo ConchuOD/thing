@@ -111,11 +111,19 @@ impl Hart
 {
 	pub fn write_register(&mut self, offset: usize, value: u64)
 	{
+		if offset == 0 {
+			return;
+		}
+
 		self.registers[offset] = value;
 	}
 
 	pub fn read_register(&mut self, offset: usize) -> u64
 	{
+		if offset == 0 {
+			return 0_u64;
+		}
+
 		return self.registers[offset];
 	}
 }
