@@ -147,7 +147,7 @@ impl Bus for Hart
 		[(); <T as LeBytes>::SIZE]:,
 	{
 		if (MEMORY_BASE..MEMORY_END).contains(&address) {
-			return Ok(self.memory.read(address - MEMORY_BASE)?);
+			return self.memory.read(address - MEMORY_BASE);
 		}
 
 		return Err(BusError::new(
@@ -162,7 +162,7 @@ impl Bus for Hart
 		[(); <T as LeBytes>::SIZE]:,
 	{
 		if (MEMORY_BASE..MEMORY_END).contains(&address) {
-			return Ok(self.memory.write(address - MEMORY_BASE, value)?);
+			return self.memory.write(address - MEMORY_BASE, value);
 		}
 
 		return Err(BusError::new(
