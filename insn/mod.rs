@@ -324,7 +324,7 @@ impl Insn
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize);
-				hart.write(address as usize, tmp);
+				let _ = hart.write(address as usize, tmp);
 			},
 
 			FUNC3_SW => {
@@ -334,7 +334,7 @@ impl Insn
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize)
 					& gen_mask!(31, 0, u64);
-				hart.write(address as usize, tmp as u32);
+				let _ = hart.write(address as usize, tmp as u32);
 			},
 
 			FUNC3_SH => {
@@ -344,7 +344,7 @@ impl Insn
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize)
 					& gen_mask!(15, 0, u64);
-				hart.write(address as usize, tmp as u16);
+				let _ = hart.write(address as usize, tmp as u16);
 			},
 
 			FUNC3_SB => {
@@ -354,7 +354,7 @@ impl Insn
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize)
 					& gen_mask!(7, 0, u64);
-				hart.write(address as usize, tmp as u8);
+				let _ = hart.write(address as usize, tmp as u8);
 			},
 
 			_ => (),
