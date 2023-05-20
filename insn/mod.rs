@@ -32,7 +32,8 @@ pub struct Insn
 
 macro_rules! gen_mask {
 	($h:expr, $l:expr, $typ:ty) => {
-		(((!0) - (1_u64.wrapping_shl($l)) + 1) & (!0 & (!0_u64 >> (64 - 1 - ($h)) as u64))) as $typ
+		(((!0) - (1_u64.wrapping_shl($l)) + 1)
+			& (!0 & (!0_u64 >> (64 - 1 - ($h)) as u64))) as $typ
 	};
 }
 
@@ -61,15 +62,18 @@ const RS2_MASK: u32 = gen_mask!(RS2_SHIFT + RS2_WIDTH - 1, RS2_SHIFT, u32);
 
 const IMM_SHIFT_UTYPE: u32 = 12;
 const IMM_WIDTH_UTYPE: u32 = 20;
-const IMM_MASK_UTYPE: u32 = gen_mask!(IMM_SHIFT_UTYPE + IMM_WIDTH_UTYPE - 1, IMM_SHIFT_UTYPE, u32);
+const IMM_MASK_UTYPE: u32 =
+	gen_mask!(IMM_SHIFT_UTYPE + IMM_WIDTH_UTYPE - 1, IMM_SHIFT_UTYPE, u32);
 
 const IMM_SHIFT_ITYPE: u32 = 20;
 const IMM_WIDTH_ITYPE: u32 = 12;
-const IMM_MASK_ITYPE: u32 = gen_mask!(IMM_SHIFT_ITYPE + IMM_WIDTH_ITYPE - 1, IMM_SHIFT_ITYPE, u32);
+const IMM_MASK_ITYPE: u32 =
+	gen_mask!(IMM_SHIFT_ITYPE + IMM_WIDTH_ITYPE - 1, IMM_SHIFT_ITYPE, u32);
 
 const IMM_SHIFT_STYPE: u32 = RD_SHIFT;
 const IMM_WIDTH_STYPE: u32 = RD_WIDTH;
-const IMM_MASK_STYPE: u32 = gen_mask!(IMM_SHIFT_STYPE + IMM_WIDTH_STYPE - 1, IMM_SHIFT_STYPE, u32);
+const IMM_MASK_STYPE: u32 =
+	gen_mask!(IMM_SHIFT_STYPE + IMM_WIDTH_STYPE - 1, IMM_SHIFT_STYPE, u32);
 
 const IMM2_SHIFT_STYPE: u32 = 25;
 const IMM2_WIDTH_STYPE: u32 = 7;
@@ -78,8 +82,11 @@ const IMM2_MASK_STYPE: u32 =
 
 const FUNC3_SHIFT_ITYPE: u32 = 12;
 const FUNC3_WIDTH_ITYPE: u32 = 3;
-const FUNC3_MASK_ITYPE: u32 =
-	gen_mask!(FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1, FUNC3_SHIFT_ITYPE, u32);
+const FUNC3_MASK_ITYPE: u32 = gen_mask!(
+	FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1,
+	FUNC3_SHIFT_ITYPE,
+	u32
+);
 
 // this should be an enum, right? (or not, there's dupes!)
 const FUNC3_ADDI: u32 = 0b000;
@@ -311,7 +318,8 @@ impl Insn
 				let offset: i64 = self.imm.try_into().unwrap();
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(31, 0, u64);
+				let tmp: u64 = hart.read_register(self.rs2 as usize)
+					& gen_mask!(31, 0, u64);
 				hart.write(address as usize, tmp as u32);
 			},
 
@@ -320,7 +328,8 @@ impl Insn
 				let offset: i64 = self.imm.try_into().unwrap();
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(15, 0, u64);
+				let tmp: u64 = hart.read_register(self.rs2 as usize)
+					& gen_mask!(15, 0, u64);
 				hart.write(address as usize, tmp as u16);
 			},
 
@@ -329,7 +338,8 @@ impl Insn
 				let offset: i64 = self.imm.try_into().unwrap();
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(7, 0, u64);
+				let tmp: u64 = hart.read_register(self.rs2 as usize)
+					& gen_mask!(7, 0, u64);
 				hart.write(address as usize, tmp as u8);
 			},
 
