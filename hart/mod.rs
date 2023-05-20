@@ -126,6 +126,17 @@ impl Hart
 
 		return self.registers[offset];
 	}
+
+	pub fn write_csr(&mut self, _offset: usize, _value: u64)
+	{
+		println!("Unimplemented csr write");
+	}
+
+	pub fn read_csr(&mut self, _offset: usize) -> u64
+	{
+		println!("Unimplemented csr read");
+		return 0_u64;
+	}
 }
 
 impl Bus for Hart

@@ -42,8 +42,10 @@ const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
 const OPCODE_JAL: u32 = 0b0110_1111;
 
-const OPCODE_STORE: u32 = 0b0100011;
-const OPCODE_LOAD: u32 = 0b0000011;
+const OPCODE_STORE: u32 = 0b010_0011;
+const OPCODE_LOAD: u32 = 0b000_0011;
+
+const OPCODE_SYSTEM: u32 = 0b111_0011;
 
 const OPCODE_INT_REG_IMM: u32 = 0b0001_0011;
 const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
@@ -120,6 +122,13 @@ const FUNC3_LH: u32 = 0b001;
 const FUNC3_LW: u32 = 0b010;
 const FUNC3_LD: u32 = 0b011;
 
+const FUNC3_CSRRW: u32 = 0b001;
+const FUNC3_CSRRS: u32 = 0b010;
+const FUNC3_CSRRC: u32 = 0b011;
+const FUNC3_CSRRWI: u32 = 0b101;
+const FUNC3_CSRRSI: u32 = 0b110;
+const FUNC3_CSRRCI: u32 = 0b111;
+
 const FUNC7_SHIFT_ITYPE: u32 = IMM2_SHIFT_STYPE;
 const FUNC7_WIDTH_ITYPE: u32 = IMM2_WIDTH_STYPE;
 const FUNC7_MASK_ITYPE: u32 = IMM2_MASK_STYPE;
@@ -186,6 +195,11 @@ impl Insn
 			OPCODE_STORE => {
 				self.insn_type = InsnType::S;
 			},
+
+			OPCODE_SYSTEM => {
+				self.insn_type = InsnType::I;
+			},
+
 			_ => println!("unknown opcode {:?}", self.opcode),
 		}
 
@@ -398,6 +412,47 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
+	fn handle_csr_insn(&mut self, hart: &mut hart::Hart)
+	{
+		// These are all store instructions of varied widths
+		match self.func3 {
+			FUNC3_CSRRW => {
+				// Quoting the spec:
+				// CSRRW reads the old value of the CSR,
+				// zero-extends the value to XLEN bits,
+				// then writes it to integer register rd.
+				// The initial value in rs1 is written to
+				// the CSR. If rd=x0, then the instruction
+				// shall not read the CSR and shall not cause
+				// any of the side effects that might occur on
+				// a CSR read
+				self.name = String::from("csrww");
+				let to_write: u64 = hart.read_register(self.rs1 as usize);
+				if self.rd != 0 {
+					let csr_old: u64 = hart.read_csr(self.imm as usize);
+					hart.write_register(self.rd as usize, csr_old);
+				}
+				hart.write_csr(self.rd as usize, to_write);
+			},
+
+			FUNC3_CSRRS => {
+				// CSRRW reads the old value of the CSR,
+				// zero-extends the value to XLEN bits,
+				// then writes it to integer register rd.
+				// The initial value in rs1 is written to
+				// the CSR. If rd=x0, then the instruction
+				// shall not read the CSR and shall not cause
+				// any of the side effects that might occur on
+				// a CSR read
+				self.name = String::from("csrws");
+			},
+
+			_ => (),
+		}
+
+		println!("Found {:}", self.name);
+	}
+
 	pub fn handle(&mut self, hart: &mut hart::Hart)
 	{
 		match self.opcode {
@@ -424,6 +479,10 @@ impl Insn
 
 			OPCODE_LOAD => {
 				self.handle_load_insn(hart);
+			},
+
+			OPCODE_SYSTEM => {
+				self.handle_csr_insn(hart);
 			},
 
 			_ => {
