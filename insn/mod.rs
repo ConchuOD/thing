@@ -288,7 +288,7 @@ impl Insn
 		match self.func3 {
 			FUNC3_SD => {
 				self.name = String::from("sd");
-				let tmp: u64 = hart.read(self.rd as usize);
+				let tmp: u64 = hart.read_register(self.rd as usize);
 				hart.write(self.rd as usize, tmp);
 			},
 
@@ -322,25 +322,25 @@ impl Insn
 		match self.func3 {
 			FUNC3_LD => {
 				self.name = String::from("ld");
-				let tmp: u64 = hart.read(self.rd as usize);
+				let tmp: u64 = hart.read(self.rd as usize).unwrap();
 				hart.write_register(self.rd as usize, tmp);
 			},
 
 			FUNC3_LW => {
 				self.name = String::from("lw");
-				let tmp: u32 = hart.read(self.rd as usize);
+				let tmp: u32 = hart.read(self.rd as usize).unwrap();
 				hart.write_register(self.rs2 as usize, tmp as u64);
 			},
 
 			FUNC3_LH => {
 				self.name = String::from("lh");
-				let tmp: u16 = hart.read(self.rs2 as usize);
+				let tmp: u16 = hart.read(self.rs2 as usize).unwrap();
 				hart.write_register(self.rs2 as usize, tmp as u64);
 			},
 
 			FUNC3_LB => {
 				self.name = String::from("lb");
-				let tmp: u8 = hart.read(self.rs2 as usize);
+				let tmp: u8 = hart.read(self.rs2 as usize).unwrap();
 				hart.write_register(self.rs2 as usize, tmp as u64);
 			},
 

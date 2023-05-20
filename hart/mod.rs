@@ -3,7 +3,7 @@
 #![allow(clippy::needless_return)]
 #![allow(non_camel_case_types)]
 
-use crate::bus::Bus;
+use crate::bus::{Bus, BusError, BusErrorKind};
 use crate::lebytes::LeBytes;
 
 pub enum RegisterNames
@@ -82,19 +82,19 @@ impl Default for Hart
 
 impl Bus for Memory
 {
-	fn read<T>(&mut self, address: usize) -> T
+	fn read<T>(&mut self, address: usize) -> Result<T, BusError>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
 	{
-		return T::from_le_bytes(
+		return Ok(T::from_le_bytes(
 			self.memory[address..address + <T as LeBytes>::SIZE - 1]
 				.try_into()
 				.unwrap(),
-		);
+		));
 	}
 
-	fn write<T>(&mut self, address: usize, value: T)
+	fn write<T>(&mut self, address: usize, value: T) -> Result<(), BusError>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
@@ -102,6 +102,8 @@ impl Bus for Memory
 		let tmp: [u8; <T as LeBytes>::SIZE] = value.to_le_bytes();
 		self.memory[address..address + <T as LeBytes>::SIZE - 1]
 			.copy_from_slice(&tmp[..<T as LeBytes>::SIZE - 1]);
+
+		return Ok(());
 	}
 }
 
@@ -120,25 +122,27 @@ impl Hart
 
 impl Bus for Hart
 {
-	fn write<T>(&mut self, address: usize, value: T)
+	fn read<T>(&mut self, address: usize) -> Result<T, BusError>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
 	{
 		if (MEMORY_BASE..MEMORY_END).contains(&address) {
-			self.memory.write(address - MEMORY_BASE, value);
+			return Ok(self.memory.read(address - MEMORY_BASE)?);
 		}
+
+		return Err(BusError::new(BusErrorKind::Unimplemented, &format!("addr: {:}", address)));
 	}
 
-	fn read<T>(&mut self, address: usize) -> T
+	fn write<T>(&mut self, address: usize, value: T) -> Result<(), BusError>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
 	{
 		if (MEMORY_BASE..MEMORY_END).contains(&address) {
-			return self.memory.read(address - MEMORY_BASE);
-		} else {
-			return T::from_le_bytes([0; <T as LeBytes>::SIZE]);
+			return Ok(self.memory.write(address - MEMORY_BASE, value)?);
 		}
+
+		return Err(BusError::new(BusErrorKind::Unimplemented, &format!("addr: {:}", address)));
 	}
 }
