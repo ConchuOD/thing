@@ -324,51 +324,56 @@ impl Insn
 		// Stores add a sign-extended 12-bit immediate to rs1, forming
 		// a memory address. The value in rs2 is put at this memory
 		// address.
-		let mut platform_guard = platform.write().unwrap();
+		let platform_guard = platform.read().unwrap();
 		match self.func3 {
 			FUNC3_SD => {
 				self.name = String::from("sd");
 				let offset: i64 = self.imm.try_into().unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize);
-				let _ = platform_guard.write(address as usize, tmp);
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
+				let _ = platform_bus.write(address as usize, tmp);
 			},
 
 			FUNC3_SW => {
 				self.name = String::from("sw");
 				let offset: i64 = self.imm.try_into().unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &(platform_guard).hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize)
 					& gen_mask!(31, 0, u64);
-				let platform_bus = &mut platform_guard;
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
 				let _ = platform_bus.write(address as usize, tmp as u32);
 			},
 
 			FUNC3_SH => {
 				self.name = String::from("sh");
 				let offset: i64 = self.imm.try_into().unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize)
 					& gen_mask!(15, 0, u64);
-				let platform_bus = &mut platform_guard;
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
 				let _ = platform_bus.write(address as usize, tmp as u16);
 			},
 
 			FUNC3_SB => {
 				self.name = String::from("sb");
 				let offset: i64 = self.imm.try_into().unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize)
 					& gen_mask!(7, 0, u64);
-				let platform_bus = &mut platform_guard;
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
 				let _ = platform_bus.write(address as usize, tmp as u8);
 			},
 
@@ -384,53 +389,57 @@ impl Insn
 		// Loads add a sign-extended 12-bit immediate to rs1, forming
 		// a memory address. The value at this memory address is put in
 		// the register in rd.
-		let mut platform_guard = platform.write().unwrap();
+		let platform_guard = platform.read().unwrap();
 		match self.func3 {
 			FUNC3_LD => {
 				self.name = String::from("ld");
 				let offset: i64 = self.imm.try_into().unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let platform_bus = &mut platform_guard;
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
 				let tmp: u64 = platform_bus.read(address as usize).unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &mut (platform_bus).hart;
 				hart.write_register(self.rd as usize, tmp);
 			},
 
 			FUNC3_LW => {
 				self.name = String::from("lw");
 				let offset: i64 = self.imm.try_into().unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let platform_bus = &mut platform_guard;
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
 				let tmp: u32 = platform_bus.read(address as usize).unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &mut (platform_bus).hart;
 				hart.write_register(self.rd as usize, tmp as u64);
 			},
 
 			FUNC3_LH => {
 				self.name = String::from("lh");
 				let offset: i64 = self.imm.try_into().unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let platform_bus = &mut platform_guard;
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
 				let tmp: u16 = platform_bus.read(address as usize).unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &mut (platform_bus).hart;
 				hart.write_register(self.rd as usize, tmp as u64);
 			},
 
 			FUNC3_LB => {
 				self.name = String::from("lb");
 				let offset: i64 = self.imm.try_into().unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let platform_bus = &mut platform_guard;
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
 				let tmp: u8 = platform_bus.read(address as usize).unwrap();
-				let hart = &mut (platform_guard).hart;
+				let hart = &mut (platform_bus).hart;
 				hart.write_register(self.rd as usize, tmp as u64);
 			},
 

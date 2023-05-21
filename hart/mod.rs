@@ -69,7 +69,7 @@ impl Hart
 		self.registers[offset] = value;
 	}
 
-	pub fn read_register(&mut self, offset: usize) -> u64
+	pub fn read_register(&self, offset: usize) -> u64
 	{
 		if offset == 0 {
 			return 0_u64;
@@ -83,7 +83,7 @@ impl Hart
 		self.csrs[offset] = value;
 	}
 
-	pub fn read_csr(&mut self, offset: usize) -> u64
+	pub fn read_csr(&self, offset: usize) -> u64
 	{
 		return self.registers[offset];
 	}
