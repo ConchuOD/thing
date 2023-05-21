@@ -85,6 +85,6 @@ impl Hart
 
 	pub fn read_csr(&self, offset: usize) -> u64
 	{
-		return self.registers[offset];
+		return self.csrs[offset];
 	}
 }
