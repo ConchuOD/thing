@@ -32,7 +32,8 @@ pub struct Insn
 
 macro_rules! gen_mask {
 	($h:expr, $l:expr, $typ:ty) => {
-		(((!0) - (1_u64.wrapping_shl($l)) + 1) & (!0 & (!0_u64 >> (64 - 1 - ($h)) as u64))) as $typ
+		(((!0) - (1_u64.wrapping_shl($l)) + 1)
+			& (!0 & (!0_u64 >> (64 - 1 - ($h)) as u64))) as $typ
 	};
 }
 
@@ -41,8 +42,10 @@ const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
 const OPCODE_JAL: u32 = 0b0110_1111;
 
-const OPCODE_STORE: u32 = 0b0100011;
-const OPCODE_LOAD: u32 = 0b0000011;
+const OPCODE_STORE: u32 = 0b010_0011;
+const OPCODE_LOAD: u32 = 0b000_0011;
+
+const OPCODE_SYSTEM: u32 = 0b111_0011;
 
 const OPCODE_INT_REG_IMM: u32 = 0b0001_0011;
 const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
@@ -61,15 +64,18 @@ const RS2_MASK: u32 = gen_mask!(RS2_SHIFT + RS2_WIDTH - 1, RS2_SHIFT, u32);
 
 const IMM_SHIFT_UTYPE: u32 = 12;
 const IMM_WIDTH_UTYPE: u32 = 20;
-const IMM_MASK_UTYPE: u32 = gen_mask!(IMM_SHIFT_UTYPE + IMM_WIDTH_UTYPE - 1, IMM_SHIFT_UTYPE, u32);
+const IMM_MASK_UTYPE: u32 =
+	gen_mask!(IMM_SHIFT_UTYPE + IMM_WIDTH_UTYPE - 1, IMM_SHIFT_UTYPE, u32);
 
 const IMM_SHIFT_ITYPE: u32 = 20;
 const IMM_WIDTH_ITYPE: u32 = 12;
-const IMM_MASK_ITYPE: u32 = gen_mask!(IMM_SHIFT_ITYPE + IMM_WIDTH_ITYPE - 1, IMM_SHIFT_ITYPE, u32);
+const IMM_MASK_ITYPE: u32 =
+	gen_mask!(IMM_SHIFT_ITYPE + IMM_WIDTH_ITYPE - 1, IMM_SHIFT_ITYPE, u32);
 
 const IMM_SHIFT_STYPE: u32 = RD_SHIFT;
 const IMM_WIDTH_STYPE: u32 = RD_WIDTH;
-const IMM_MASK_STYPE: u32 = gen_mask!(IMM_SHIFT_STYPE + IMM_WIDTH_STYPE - 1, IMM_SHIFT_STYPE, u32);
+const IMM_MASK_STYPE: u32 =
+	gen_mask!(IMM_SHIFT_STYPE + IMM_WIDTH_STYPE - 1, IMM_SHIFT_STYPE, u32);
 
 const IMM2_SHIFT_STYPE: u32 = 25;
 const IMM2_WIDTH_STYPE: u32 = 7;
@@ -78,8 +84,11 @@ const IMM2_MASK_STYPE: u32 =
 
 const FUNC3_SHIFT_ITYPE: u32 = 12;
 const FUNC3_WIDTH_ITYPE: u32 = 3;
-const FUNC3_MASK_ITYPE: u32 =
-	gen_mask!(FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1, FUNC3_SHIFT_ITYPE, u32);
+const FUNC3_MASK_ITYPE: u32 = gen_mask!(
+	FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1,
+	FUNC3_SHIFT_ITYPE,
+	u32
+);
 
 // this should be an enum, right? (or not, there's dupes!)
 const FUNC3_ADDI: u32 = 0b000;
@@ -112,6 +121,13 @@ const FUNC3_LB: u32 = 0b000;
 const FUNC3_LH: u32 = 0b001;
 const FUNC3_LW: u32 = 0b010;
 const FUNC3_LD: u32 = 0b011;
+
+const FUNC3_CSRRW: u32 = 0b001;
+const FUNC3_CSRRS: u32 = 0b010;
+const FUNC3_CSRRC: u32 = 0b011;
+const FUNC3_CSRRWI: u32 = 0b101;
+const FUNC3_CSRRSI: u32 = 0b110;
+const FUNC3_CSRRCI: u32 = 0b111;
 
 const FUNC7_SHIFT_ITYPE: u32 = IMM2_SHIFT_STYPE;
 const FUNC7_WIDTH_ITYPE: u32 = IMM2_WIDTH_STYPE;
@@ -179,6 +195,11 @@ impl Insn
 			OPCODE_STORE => {
 				self.insn_type = InsnType::S;
 			},
+
+			OPCODE_SYSTEM => {
+				self.insn_type = InsnType::I;
+			},
+
 			_ => println!("unknown opcode {:?}", self.opcode),
 		}
 
@@ -260,7 +281,15 @@ impl Insn
 	{
 		match self.func3 {
 			FUNC3_ADDI => {
-				self.name = String::from("addi");
+				if self.imm == 0 && self.rs1 == 0 && self.rd == 0 {
+					self.name = String::from("nop");
+					return;
+				} else if self.imm == 0 {
+					self.name = String::from("mv");
+				} else {
+					self.name = String::from("addi");
+				}
+
 				// ADDI adds the sign-extended 12-bit immediate
 				// to register rs1. Arithmetic overflow is
 				// ignored and the result is simply the low XLEN
@@ -285,29 +314,47 @@ impl Insn
 	fn handle_store_insn(&mut self, hart: &mut hart::Hart)
 	{
 		// These are all store instructions of varied widths
+		// Stores add a sign-extended 12-bit immediate to rs1, forming
+		// a memory address. The value in rs2 is put at this memory
+		// address.
 		match self.func3 {
 			FUNC3_SD => {
 				self.name = String::from("sd");
-				let tmp: u64 = hart.read_register(self.rd as usize);
-				hart.write(self.rd as usize, tmp);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u64 = hart.read_register(self.rs2 as usize);
+				let _ = hart.write(address as usize, tmp);
 			},
 
 			FUNC3_SW => {
 				self.name = String::from("sw");
-				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(31, 0, u64);
-				hart.write(self.rd as usize, tmp as u32);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u64 = hart.read_register(self.rs2 as usize)
+					& gen_mask!(31, 0, u64);
+				let _ = hart.write(address as usize, tmp as u32);
 			},
 
 			FUNC3_SH => {
 				self.name = String::from("sh");
-				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(15, 0, u64);
-				hart.write(self.rd as usize, tmp as u16);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u64 = hart.read_register(self.rs2 as usize)
+					& gen_mask!(15, 0, u64);
+				let _ = hart.write(address as usize, tmp as u16);
 			},
 
 			FUNC3_SB => {
 				self.name = String::from("sb");
-				let tmp: u64 = hart.read_register(self.rs2 as usize) & gen_mask!(7, 0, u64);
-				hart.write(self.rd as usize, tmp as u8);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u64 = hart.read_register(self.rs2 as usize)
+					& gen_mask!(7, 0, u64);
+				let _ = hart.write(address as usize, tmp as u8);
 			},
 
 			_ => (),
@@ -318,30 +365,94 @@ impl Insn
 
 	fn handle_load_insn(&mut self, hart: &mut hart::Hart)
 	{
-		// These are all store instructions of varied widths
+		// These are all load instructions of varied widths.
+		// Loads add a sign-extended 12-bit immediate to rs1, forming
+		// a memory address. The value at this memory address is put in
+		// the register in rd.
 		match self.func3 {
 			FUNC3_LD => {
 				self.name = String::from("ld");
-				let tmp: u64 = hart.read(self.rd as usize).unwrap();
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u64 = hart.read(address as usize).unwrap();
 				hart.write_register(self.rd as usize, tmp);
 			},
 
 			FUNC3_LW => {
 				self.name = String::from("lw");
-				let tmp: u32 = hart.read(self.rd as usize).unwrap();
-				hart.write_register(self.rs2 as usize, tmp as u64);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u32 = hart.read(address as usize).unwrap();
+				hart.write_register(self.rd as usize, tmp as u64);
 			},
 
 			FUNC3_LH => {
 				self.name = String::from("lh");
-				let tmp: u16 = hart.read(self.rs2 as usize).unwrap();
-				hart.write_register(self.rs2 as usize, tmp as u64);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u16 = hart.read(address as usize).unwrap();
+				hart.write_register(self.rd as usize, tmp as u64);
 			},
 
 			FUNC3_LB => {
 				self.name = String::from("lb");
-				let tmp: u8 = hart.read(self.rs2 as usize).unwrap();
-				hart.write_register(self.rs2 as usize, tmp as u64);
+				let offset: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let address: u64 = base.wrapping_add_signed(offset);
+				let tmp: u8 = hart.read(address as usize).unwrap();
+				hart.write_register(self.rd as usize, tmp as u64);
+			},
+
+			_ => (),
+		}
+
+		println!("Found {:}", self.name);
+	}
+
+	fn handle_csr_insn(&mut self, hart: &mut hart::Hart)
+	{
+		// These are all store instructions of varied widths
+		match self.func3 {
+			FUNC3_CSRRW => {
+				// Quoting the spec:
+				// CSRRW reads the old value of the CSR,
+				// zero-extends the value to XLEN bits,
+				// then writes it to integer register rd.
+				// The initial value in rs1 is written to
+				// the CSR. If rd=x0, then the instruction
+				// shall not read the CSR and shall not cause
+				// any of the side effects that might occur on
+				// a CSR read
+				self.name = String::from("csrww");
+				let to_write: u64 = hart.read_register(self.rs1 as usize);
+				if self.rd != 0 {
+					let csr_old: u64 = hart.read_csr(self.imm as usize);
+					hart.write_register(self.rd as usize, csr_old);
+				}
+				hart.write_csr(self.rd as usize, to_write);
+			},
+
+			FUNC3_CSRRS => {
+				// Quoting the spec:
+				// CSRRS reads the value of the CSR, zero
+				// extends the value to XLEN bits, and writes
+				// it to integer register rd. The initial value
+				// in integer register rs1 is treated as a bit
+				// mask that specifies bit positions to be set
+				// in the CSR. Any bit that is high in rs1 will
+				// cause the corresponding bit to be set in the
+				// CSR, if that CSR bit is writable.
+				self.name = String::from("csrws");
+				let mut csr_val: u64 = hart.read_csr(self.imm as usize);
+				hart.write_register(self.rd as usize, csr_val);
+				if self.rs1 != 0 {
+					let mask = hart.read_register(self.rs1 as usize);
+					csr_val &= mask;
+					hart.write_csr(self.imm as usize, csr_val);
+				}
 			},
 
 			_ => (),
@@ -376,6 +487,10 @@ impl Insn
 
 			OPCODE_LOAD => {
 				self.handle_load_insn(hart);
+			},
+
+			OPCODE_SYSTEM => {
+				self.handle_csr_insn(hart);
 			},
 
 			_ => {
