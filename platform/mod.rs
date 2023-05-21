@@ -55,7 +55,8 @@ impl Bus for Platform
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
 	{
-		if (MEMORY_BASE..MEMORY_END).contains(&address) {
+		let memory = &self.memory;
+		if (memory.start..memory.end).contains(&address) {
 			return self.memory.read(address - MEMORY_BASE);
 		}
 
@@ -70,7 +71,8 @@ impl Bus for Platform
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
 	{
-		if (MEMORY_BASE..MEMORY_END).contains(&address) {
+		let memory = &self.memory;
+		if (memory.start..memory.end).contains(&address) {
 			return self.memory.write(address - MEMORY_BASE, value);
 		}
 
@@ -82,12 +84,22 @@ impl Bus for Platform
 }
 
 const MEMORY_BASE: usize = 0x0;
-const MEMORY_SIZE: usize = 0x1000; // TODO: clearly 0x1000 is insufficient
+const MEMORY_SIZE: usize = 0x1000;
 const MEMORY_END: usize = MEMORY_BASE + MEMORY_SIZE;
 
 pub struct Memory
 {
+	start: usize,
+	end: usize,
 	memory: [u8; MEMORY_SIZE],
+}
+
+impl Memory
+{
+	pub fn size(self) -> usize
+	{
+		return self.end - self.start;
+	}
 }
 
 impl Default for Memory
@@ -95,6 +107,8 @@ impl Default for Memory
 	fn default() -> Memory
 	{
 		return Memory {
+			start: MEMORY_BASE,
+			end: MEMORY_END,
 			memory: [0; MEMORY_SIZE],
 		};
 	}
