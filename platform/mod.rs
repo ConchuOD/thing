@@ -2,8 +2,10 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
+use crate::bus::{Bus, BusError, BusErrorKind};
 use crate::hart::Hart;
 use crate::insn::Insn;
+use crate::lebytes::LeBytes;
 
 fn u8s_to_insn(input: &[u8; 4]) -> u32
 {
@@ -16,8 +18,9 @@ fn u8s_to_insn(input: &[u8; 4]) -> u32
 #[derive(Default)]
 pub struct Platform
 {
-	hart: Hart,
+	pub hart: Hart,
 	elf: Vec<u8>,
+	memory: Memory,
 }
 
 impl Platform
@@ -36,8 +39,89 @@ impl Platform
 			let insn: u32 = u8s_to_insn(insn_bits.try_into()?);
 			let mut something: Insn = Insn::from(insn);
 
-			something.handle(&mut self.hart);
+			something.handle(self);
+
+			self.hart.pc += 4;
 		}
+
+		return Ok(());
+	}
+}
+
+impl Bus for Platform
+{
+	fn read<T>(&mut self, address: usize) -> Result<T, BusError>
+	where
+		T: LeBytes,
+		[(); <T as LeBytes>::SIZE]:,
+	{
+		if (MEMORY_BASE..MEMORY_END).contains(&address) {
+			return self.memory.read(address - MEMORY_BASE);
+		}
+
+		return Err(BusError::new(
+			BusErrorKind::Unimplemented,
+			&format!("addr: {:}", address),
+		));
+	}
+
+	fn write<T>(&mut self, address: usize, value: T) -> Result<(), BusError>
+	where
+		T: LeBytes,
+		[(); <T as LeBytes>::SIZE]:,
+	{
+		if (MEMORY_BASE..MEMORY_END).contains(&address) {
+			return self.memory.write(address - MEMORY_BASE, value);
+		}
+
+		return Err(BusError::new(
+			BusErrorKind::Unimplemented,
+			&format!("addr: {:}", address),
+		));
+	}
+}
+
+const MEMORY_BASE: usize = 0x0;
+const MEMORY_SIZE: usize = 0x1000; // TODO: clearly 0x1000 is insufficient
+const MEMORY_END: usize = MEMORY_BASE + MEMORY_SIZE;
+
+pub struct Memory
+{
+	memory: [u8; MEMORY_SIZE],
+}
+
+impl Default for Memory
+{
+	fn default() -> Memory
+	{
+		return Memory {
+			memory: [0; MEMORY_SIZE],
+		};
+	}
+}
+
+impl Bus for Memory
+{
+	fn read<T>(&mut self, address: usize) -> Result<T, BusError>
+	where
+		T: LeBytes,
+		[(); <T as LeBytes>::SIZE]:,
+	{
+		return Ok(T::from_le_bytes(
+			self.memory[address..address + <T as LeBytes>::SIZE]
+				.try_into()
+				.unwrap(),
+		));
+	}
+
+	fn write<T>(&mut self, address: usize, value: T) -> Result<(), BusError>
+	where
+		T: LeBytes,
+		[(); <T as LeBytes>::SIZE]:,
+	{
+		let tmp: [u8; <T as LeBytes>::SIZE] = value.to_le_bytes();
+		self.memory[address..address + <T as LeBytes>::SIZE]
+			.copy_from_slice(&tmp[..<T as LeBytes>::SIZE]);
 
 		return Ok(());
 	}
