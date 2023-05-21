@@ -461,16 +461,21 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
+	fn handle_auipc_insn(&mut self, hart: &mut hart::Hart)
+	{
+		// @Johan: AUIPC is "add upper immediate to program counter"
+		self.name = String::from("auipc");
+		let tmp: i64 = self.imm.try_into().unwrap();
+		hart.write_register(self.rd as usize, hart.pc.wrapping_add_signed(tmp));
+
+		println!("Found {:}", self.name);
+	}
+
 	pub fn handle(&mut self, hart: &mut hart::Hart)
 	{
 		match self.opcode {
 			OPCODE_AUIPC => {
-				let mut registers = hart.registers;
-				self.name = String::from("auipc");
-				println!("Found {:}", self.name);
-				// @Johan: AUIPC is "add upper immediate to program counter"
-				let tmp: i64 = self.imm.try_into().unwrap();
-				registers[self.rd as usize] = hart.pc.wrapping_add_signed(tmp);
+				self.handle_auipc_insn(hart);
 			},
 
 			OPCODE_INT_REG_REG => {
