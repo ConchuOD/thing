@@ -6,6 +6,7 @@ use crate::bus::{Bus, BusError, BusErrorKind};
 use crate::hart::Hart;
 use crate::insn::Insn;
 use crate::lebytes::LeBytes;
+use std::error::Error;
 
 fn u8s_to_insn(input: &[u8; 4]) -> u32
 {
@@ -19,32 +20,48 @@ fn u8s_to_insn(input: &[u8; 4]) -> u32
 pub struct Platform
 {
 	pub hart: Hart,
-	elf: Vec<u8>,
 	memory: Memory,
 }
 
 impl Platform
 {
-	pub fn load_file(&mut self, elf: Vec<u8>, entry_point: usize)
+	pub fn load_file(
+		&mut self, blob: Vec<u8>, load_address: usize, entry_point: usize,
+	) -> Result<(), Box<dyn Error>>
 	{
 		self.hart.pc = entry_point as u64;
-		self.elf = elf;
-	}
 
-	pub fn emulate(&mut self) -> Result<(), Box<dyn std::error::Error>>
-	{
-		while (self.hart.pc as usize) < self.elf.len() {
-			let insn_bits: &[u8] =
-				&self.elf[self.hart.pc as usize..(self.hart.pc + 4) as usize];
-			let insn: u32 = u8s_to_insn(insn_bits.try_into()?);
-			let mut something: Insn = Insn::from(insn);
+		let memory = &mut self.memory;
 
-			something.handle(self);
-
-			self.hart.pc += 4;
+		if !(memory.start..memory.end).contains(&load_address) {
+			return Err(Box::<dyn Error>::from(
+				"load address out of bounds".to_string(),
+			));
 		}
 
+		let elf_end = load_address + blob.len();
+		if elf_end > memory.end {
+			return Err(Box::<dyn Error>::from(
+				"insufficient memory for blob".to_string(),
+			));
+		}
+
+		memory.memory[load_address..elf_end].copy_from_slice(&blob[..]);
+
 		return Ok(());
+	}
+
+	pub fn emulate(&mut self) -> Result<(), Box<dyn Error>>
+	{
+		let mut pc = self.hart.pc as usize;
+		loop {
+			let insn_bits: &[u8] = &self.memory.memory[pc..(pc + 4)];
+			let insn: u32 = u8s_to_insn(insn_bits.try_into()?);
+			let mut insn: Insn = Insn::from(insn);
+
+			insn.handle(self);
+			pc += 4;
+		}
 	}
 }
 

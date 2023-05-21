@@ -32,6 +32,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 
 	let entry_point: usize = 0x164;
 
-	platform.load_file(elf, entry_point);
+	platform.load_file(elf, 0, entry_point)?;
 	return platform.emulate();
 }
