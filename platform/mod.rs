@@ -101,14 +101,20 @@ impl Bus for Platform
 }
 
 const MEMORY_BASE: usize = 0x0;
-const MEMORY_SIZE: usize = 0x1000;
+const MEMORY_SIZE: usize = 0x1000_0000;
 const MEMORY_END: usize = MEMORY_BASE + MEMORY_SIZE;
+
+fn heap_allocate_memory() -> Box<[u8]>
+{
+	let memory: Box<[u8]> = vec![0u8; MEMORY_SIZE].into_boxed_slice();
+	return memory;
+}
 
 pub struct Memory
 {
 	start: usize,
 	end: usize,
-	memory: [u8; MEMORY_SIZE],
+	memory: Box<[u8]>,
 }
 
 impl Memory
@@ -126,7 +132,7 @@ impl Default for Memory
 		return Memory {
 			start: MEMORY_BASE,
 			end: MEMORY_END,
-			memory: [0; MEMORY_SIZE],
+			memory: heap_allocate_memory(),
 		};
 	}
 }
@@ -155,5 +161,20 @@ impl Bus for Memory
 			.copy_from_slice(&tmp[..<T as LeBytes>::SIZE]);
 
 		return Ok(());
+	}
+}
+
+#[cfg(test)]
+mod test
+{
+	use crate::platform::MEMORY_SIZE;
+
+	use super::heap_allocate_memory;
+
+	#[test]
+	fn can_heap_alloc()
+	{
+		let memory = heap_allocate_memory();
+		assert_eq!(memory.len(), MEMORY_SIZE);
 	}
 }
