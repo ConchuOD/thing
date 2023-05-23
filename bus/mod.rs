@@ -6,30 +6,31 @@ use crate::lebytes::LeBytes;
 use std::fmt;
 
 #[derive(Debug)]
-pub enum BusErrorKind
+pub enum ErrorKind
 {
 	Unimplemented,
+	AccessBeyondPeripheral,
 }
 
 #[derive(Debug)]
-pub struct BusError
+pub struct Error
 {
-	kind: BusErrorKind,
+	kind: ErrorKind,
 	details: String,
 }
 
-impl BusError
+impl Error
 {
-	pub fn new(kind: BusErrorKind, msg: &str) -> BusError
+	pub fn new(kind: ErrorKind, msg: &str) -> Error
 	{
-		return BusError {
+		return Error {
 			kind,
 			details: msg.to_string(),
 		};
 	}
 }
 
-impl fmt::Display for BusError
+impl fmt::Display for Error
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
 	{
@@ -39,12 +40,12 @@ impl fmt::Display for BusError
 
 pub trait Bus
 {
-	fn read<T>(&mut self, address: usize) -> Result<T, BusError>
+	fn read<T>(&mut self, address: usize) -> Result<T, Error>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:;
 
-	fn write<T>(&mut self, address: usize, value: T) -> Result<(), BusError>
+	fn write<T>(&mut self, address: usize, value: T) -> Result<(), Error>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:;

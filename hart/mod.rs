@@ -3,7 +3,7 @@
 #![allow(clippy::needless_return)]
 #![allow(non_camel_case_types)]
 
-use crate::bus::{Bus, BusError, BusErrorKind};
+use crate::bus::{self, Bus};
 use crate::lebytes::LeBytes;
 
 pub enum RegisterNames
@@ -84,7 +84,7 @@ impl Default for Hart
 
 impl Bus for Memory
 {
-	fn read<T>(&mut self, address: usize) -> Result<T, BusError>
+	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
@@ -96,7 +96,7 @@ impl Bus for Memory
 		));
 	}
 
-	fn write<T>(&mut self, address: usize, value: T) -> Result<(), BusError>
+	fn write<T>(&mut self, address: usize, value: T) -> Result<(), bus::Error>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
@@ -142,7 +142,7 @@ impl Hart
 
 impl Bus for Hart
 {
-	fn read<T>(&mut self, address: usize) -> Result<T, BusError>
+	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
@@ -151,13 +151,13 @@ impl Bus for Hart
 			return self.memory.read(address - MEMORY_BASE);
 		}
 
-		return Err(BusError::new(
-			BusErrorKind::Unimplemented,
+		return Err(bus::Error::new(
+			bus::ErrorKind::Unimplemented,
 			&format!("addr: {:}", address),
 		));
 	}
 
-	fn write<T>(&mut self, address: usize, value: T) -> Result<(), BusError>
+	fn write<T>(&mut self, address: usize, value: T) -> Result<(), bus::Error>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
@@ -166,8 +166,8 @@ impl Bus for Hart
 			return self.memory.write(address - MEMORY_BASE, value);
 		}
 
-		return Err(BusError::new(
-			BusErrorKind::Unimplemented,
+		return Err(bus::Error::new(
+			bus::ErrorKind::Unimplemented,
 			&format!("addr: {:}", address),
 		));
 	}
