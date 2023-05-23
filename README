@@ -1,0 +1,5 @@
+risc-v emulation playground in rust
+
+just for the craic, won't be big and professional like qemu
+nothing works, everything may be a placeholder
+don't even bother trying to run anything
