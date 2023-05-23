@@ -101,14 +101,32 @@ impl Bus for Platform
 }
 
 const MEMORY_BASE: usize = 0x0;
-const MEMORY_SIZE: usize = 0x1000;
+const MEMORY_SIZE: usize = 0x1000_0000;
 const MEMORY_END: usize = MEMORY_BASE + MEMORY_SIZE;
+
+macro_rules! heap_allocate_memory {
+	() => {{
+		fn heap_allocate_memory() -> Box<[u8; MEMORY_SIZE]>
+		{
+			let memory_backing = vec![0u8; MEMORY_SIZE];
+			let boxed_slice = memory_backing.into_boxed_slice();
+
+			let memory_box = std::boxed::Box::into_raw(boxed_slice) as *mut [u8; MEMORY_SIZE];
+
+			return unsafe {
+				Box::from_raw(memory_box)
+			};
+		}
+
+		heap_allocate_memory()
+	}};
+}
 
 pub struct Memory
 {
 	start: usize,
 	end: usize,
-	memory: [u8; MEMORY_SIZE],
+	memory: Box<[u8]>,
 }
 
 impl Memory
@@ -126,7 +144,7 @@ impl Default for Memory
 		return Memory {
 			start: MEMORY_BASE,
 			end: MEMORY_END,
-			memory: [0; MEMORY_SIZE],
+			memory: heap_allocate_memory!(),
 		};
 	}
 }
