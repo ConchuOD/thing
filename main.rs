@@ -19,7 +19,7 @@ mod platform;
 struct Args
 {
 	/// input binary
-	#[clap(short, long, default_value = "hi.elf")]
+	#[clap(short, long, default_value = "vmlinux")]
 	blob: String,
 
 	/// load address
@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 	let args = Args::parse();
 	let blob: Vec<u8> = fs::read(args.blob)?;
 	let mut load_address: usize = 0x0;
-	let mut entry_point: usize = 0x164;
+	let mut entry_point: usize = 0x1000;
 
 	if args.load_address.is_some() {
 		load_address = args.load_address.unwrap();
