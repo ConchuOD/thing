@@ -3,7 +3,10 @@
 #![allow(clippy::needless_return)]
 
 use crate::bus::Bus;
-use crate::hart;
+use crate::platform::Platform;
+
+use std::sync::Arc;
+use std::sync::RwLock;
 
 #[derive(PartialEq)]
 pub enum InsnType
@@ -238,8 +241,10 @@ impl Insn
 		}
 	}
 
-	fn handle_int_reg_reg_insn(&mut self, hart: &mut hart::Hart)
+	fn handle_int_reg_reg_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
 	{
+		let hart = &mut (platform.write().unwrap()).hart;
+
 		match self.func3 {
 			FUNC3_ADD => {
 				if self.func7 != 0 {
@@ -277,8 +282,10 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
-	fn handle_int_reg_imm_insn(&mut self, hart: &mut hart::Hart)
+	fn handle_int_reg_imm_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
 	{
+		let hart = &mut (platform.write().unwrap()).hart;
+
 		match self.func3 {
 			FUNC3_ADDI => {
 				if self.imm == 0 && self.rs1 == 0 && self.rd == 0 {
@@ -311,50 +318,63 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
-	fn handle_store_insn(&mut self, hart: &mut hart::Hart)
+	fn handle_store_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
 	{
 		// These are all store instructions of varied widths
 		// Stores add a sign-extended 12-bit immediate to rs1, forming
 		// a memory address. The value in rs2 is put at this memory
 		// address.
+		let platform_guard = platform.read().unwrap();
 		match self.func3 {
 			FUNC3_SD => {
 				self.name = String::from("sd");
 				let offset: i64 = self.imm.try_into().unwrap();
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize);
-				let _ = hart.write(address as usize, tmp);
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
+				let _ = platform_bus.write(address as usize, tmp);
 			},
 
 			FUNC3_SW => {
 				self.name = String::from("sw");
 				let offset: i64 = self.imm.try_into().unwrap();
+				let hart = &(platform_guard).hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize)
 					& gen_mask!(31, 0, u64);
-				let _ = hart.write(address as usize, tmp as u32);
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
+				let _ = platform_bus.write(address as usize, tmp as u32);
 			},
 
 			FUNC3_SH => {
 				self.name = String::from("sh");
 				let offset: i64 = self.imm.try_into().unwrap();
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize)
 					& gen_mask!(15, 0, u64);
-				let _ = hart.write(address as usize, tmp as u16);
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
+				let _ = platform_bus.write(address as usize, tmp as u16);
 			},
 
 			FUNC3_SB => {
 				self.name = String::from("sb");
 				let offset: i64 = self.imm.try_into().unwrap();
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
 				let tmp: u64 = hart.read_register(self.rs2 as usize)
 					& gen_mask!(7, 0, u64);
-				let _ = hart.write(address as usize, tmp as u8);
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
+				let _ = platform_bus.write(address as usize, tmp as u8);
 			},
 
 			_ => (),
@@ -363,57 +383,78 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
-	fn handle_load_insn(&mut self, hart: &mut hart::Hart)
+	fn handle_load_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
 	{
 		// These are all load instructions of varied widths.
 		// Loads add a sign-extended 12-bit immediate to rs1, forming
 		// a memory address. The value at this memory address is put in
 		// the register in rd.
+		let platform_guard = platform.read().unwrap();
 		match self.func3 {
 			FUNC3_LD => {
 				self.name = String::from("ld");
 				let offset: i64 = self.imm.try_into().unwrap();
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let tmp: u64 = hart.read(address as usize).unwrap();
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
+				let tmp: u64 = platform_bus.read(address as usize).unwrap();
+				let hart = &mut (platform_bus).hart;
 				hart.write_register(self.rd as usize, tmp);
 			},
 
 			FUNC3_LW => {
 				self.name = String::from("lw");
 				let offset: i64 = self.imm.try_into().unwrap();
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let tmp: u32 = hart.read(address as usize).unwrap();
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
+				let tmp: u32 = platform_bus.read(address as usize).unwrap();
+				let hart = &mut (platform_bus).hart;
 				hart.write_register(self.rd as usize, tmp as u64);
 			},
 
 			FUNC3_LH => {
 				self.name = String::from("lh");
 				let offset: i64 = self.imm.try_into().unwrap();
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let tmp: u16 = hart.read(address as usize).unwrap();
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
+				let tmp: u16 = platform_bus.read(address as usize).unwrap();
+				let hart = &mut (platform_bus).hart;
 				hart.write_register(self.rd as usize, tmp as u64);
 			},
 
 			FUNC3_LB => {
 				self.name = String::from("lb");
 				let offset: i64 = self.imm.try_into().unwrap();
+				let hart = &platform_guard.hart;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let address: u64 = base.wrapping_add_signed(offset);
-				let tmp: u8 = hart.read(address as usize).unwrap();
+				drop(platform_guard);
+				let platform_bus = &mut platform.write().unwrap();
+				let tmp: u8 = platform_bus.read(address as usize).unwrap();
+				let hart = &mut (platform_bus).hart;
 				hart.write_register(self.rd as usize, tmp as u64);
 			},
 
-			_ => (),
+			_ => {
+				return;
+			},
 		}
 
 		println!("Found {:}", self.name);
 	}
 
-	fn handle_csr_insn(&mut self, hart: &mut hart::Hart)
+	fn handle_csr_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
 	{
+		let hart = &mut (platform.write().unwrap()).hart;
+
 		// These are all store instructions of varied widths
 		match self.func3 {
 			FUNC3_CSRRW => {
@@ -461,44 +502,50 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
-	pub fn handle(&mut self, hart: &mut hart::Hart)
+	fn handle_auipc_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
 	{
+		let hart = &mut (platform.write().unwrap()).hart;
+		// @Johan: AUIPC is "add upper immediate to program counter"
+		self.name = String::from("auipc");
+		let tmp: i64 = self.imm.try_into().unwrap();
+		hart.write_register(self.rd as usize, hart.pc.wrapping_add_signed(tmp));
+
+		println!("Found {:}", self.name);
+	}
+
+	pub fn handle(&mut self, platform: &mut Platform)
+	{
+		let arc = Arc::new(std::sync::RwLock::new(platform));
+
 		match self.opcode {
 			OPCODE_AUIPC => {
-				let mut registers = hart.registers;
-				self.name = String::from("auipc");
-				println!("Found {:}", self.name);
-				// @Johan: AUIPC is "add upper immediate to program counter"
-				let tmp: i64 = self.imm.try_into().unwrap();
-				registers[self.rd as usize] = hart.pc.wrapping_add_signed(tmp);
+				self.handle_auipc_insn(arc);
 			},
 
 			OPCODE_INT_REG_REG => {
-				self.handle_int_reg_reg_insn(hart);
+				self.handle_int_reg_reg_insn(arc);
 			},
 
 			OPCODE_INT_REG_IMM => {
-				self.handle_int_reg_imm_insn(hart);
+				self.handle_int_reg_imm_insn(arc);
 			},
 
 			OPCODE_STORE => {
-				self.handle_store_insn(hart);
+				self.handle_store_insn(arc);
 			},
 
 			OPCODE_LOAD => {
-				self.handle_load_insn(hart);
+				self.handle_load_insn(arc);
 			},
 
 			OPCODE_SYSTEM => {
-				self.handle_csr_insn(hart);
+				self.handle_csr_insn(arc);
 			},
 
 			_ => {
 				println!("unimplemented instruction {:x}", self.opcode);
 			},
 		}
-
-		hart.pc += 4;
 
 		return;
 	}
