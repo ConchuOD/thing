@@ -9,7 +9,7 @@ use std::fmt;
 pub enum ErrorKind
 {
 	Unimplemented,
-	AccessBeyondPeripheral,
+	OutOfBounds,
 }
 
 #[derive(Debug)]
