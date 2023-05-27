@@ -514,7 +514,11 @@ impl Insn
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
-		// These are all store instructions of varied widths
+		// The "funky" thing to look out for with these CSR things,
+		// is that they are I-type instructions, so use the "imm"
+		// field to store a csr number. Those that use immediates
+		// specifically use unsigned ones & those appear in the
+		// rs1 field of a regular I-type.
 		match self.func3 {
 			FUNC3_CSRRW => {
 				// Quoting the spec:
@@ -525,9 +529,22 @@ impl Insn
 				// the CSR. If rd=x0, then the instruction
 				// shall not read the CSR and shall not cause
 				// any of the side effects that might occur on
-				// a CSR read
+				// a CSR read.
 				self.name = String::from("csrww");
 				let to_write: u64 = hart.read_register(self.rs1 as usize);
+				if self.rd != 0 {
+					let csr_old: u64 = hart.read_csr(self.imm as usize);
+					hart.write_register(self.rd as usize, csr_old);
+				}
+				hart.write_csr(self.rd as usize, to_write);
+			},
+
+			FUNC3_CSRRWI => {
+				// Like CSRRW, but uses an intermediate from
+				// rs1 instead of reading from a register,
+				// limiting it to the lower 5 bits.
+				self.name = String::from("csrrwi");
+				let to_write: u64 = self.rs1 as u64;
 				if self.rd != 0 {
 					let csr_old: u64 = hart.read_csr(self.imm as usize);
 					hart.write_register(self.rd as usize, csr_old);
