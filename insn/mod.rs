@@ -304,7 +304,7 @@ impl Insn
 		}
 	}
 
-	fn handle_int_reg_reg_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
+	fn handle_int_reg_reg_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
@@ -341,7 +341,7 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_int_reg_imm_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
+	fn handle_int_reg_imm_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
@@ -377,7 +377,7 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_store_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
+	fn handle_store_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		// These are all store instructions of varied widths
 		// Stores add a sign-extended 12-bit immediate to rs1, forming
@@ -442,7 +442,7 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_load_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
+	fn handle_load_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		// These are all load instructions of varied widths.
 		// Loads add a sign-extended 12-bit immediate to rs1, forming
@@ -510,7 +510,7 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_csr_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
+	fn handle_csr_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
@@ -578,7 +578,7 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_jump_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
+	fn handle_jump_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
@@ -622,7 +622,7 @@ impl Insn
 		}
 	}
 
-	fn handle_auipc_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
+	fn handle_auipc_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 		// @Johan: AUIPC is "add upper immediate to program counter"
@@ -633,37 +633,45 @@ impl Insn
 		debug_println!("{:}: added {:} to {:}", self.name, self.imm, hart.pc);
 	}
 
+	fn increment_pc(&self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		if (self.opcode != OPCODE_JAL) && (self.opcode != OPCODE_JALR) {
+			let hart = &mut (platform.write().unwrap()).hart;
+			hart.pc += 4;
+		}
+	}
+
 	pub fn handle(&mut self, platform: &mut Platform)
 	{
 		let arc = Arc::new(std::sync::RwLock::new(platform));
 
 		match self.opcode {
 			OPCODE_AUIPC => {
-				self.handle_auipc_insn(arc);
+				self.handle_auipc_insn(&arc);
 			},
 
 			OPCODE_INT_REG_REG => {
-				self.handle_int_reg_reg_insn(arc);
+				self.handle_int_reg_reg_insn(&arc);
 			},
 
 			OPCODE_INT_REG_IMM => {
-				self.handle_int_reg_imm_insn(arc);
+				self.handle_int_reg_imm_insn(&arc);
 			},
 
 			OPCODE_STORE => {
-				self.handle_store_insn(arc);
+				self.handle_store_insn(&arc);
 			},
 
 			OPCODE_LOAD => {
-				self.handle_load_insn(arc);
+				self.handle_load_insn(&arc);
 			},
 
 			OPCODE_SYSTEM => {
-				self.handle_csr_insn(arc);
+				self.handle_csr_insn(&arc);
 			},
 
 			OPCODE_JAL | OPCODE_JALR => {
-				self.handle_jump_insn(arc);
+				self.handle_jump_insn(&arc);
 			},
 
 			OPCODE_MISCMEM => {
@@ -676,6 +684,8 @@ impl Insn
 				panic!();
 			},
 		}
+
+		self.increment_pc(&arc);
 
 		return;
 	}

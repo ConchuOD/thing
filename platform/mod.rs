@@ -63,7 +63,6 @@ impl Platform
 			let mut insn: Insn = Insn::from(insn);
 
 			insn.handle(self);
-			self.hart.pc += 4;
 		}
 	}
 }
