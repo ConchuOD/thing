@@ -53,6 +53,8 @@ const OPCODE_LOAD: u32 = 0b000_0011;
 
 const OPCODE_SYSTEM: u32 = 0b111_0011;
 
+const OPCODE_MISCMEM: u32 = 0b000_1111;
+
 const OPCODE_INT_REG_IMM: u32 = 0b0001_0011;
 const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
 
@@ -242,7 +244,13 @@ impl Insn
 				self.insn_type = InsnType::I;
 			},
 
-			_ => println!("unknown opcode {:?}", self.opcode),
+			OPCODE_MISCMEM => {
+				self.insn_type = InsnType::I;
+			},
+
+			_ => {
+				debug_println!("unknown opcode {:?}", self.opcode);
+			},
 		}
 
 		match self.insn_type {
@@ -327,14 +335,10 @@ impl Insn
 				}
 			},
 
-			FUNC3_SLTU => {
-				self.name = String::from("sltu");
-			},
-
-			_ => (),
+			_ => todo!("reg reg: {:}", self.func3),
 		}
 
-		println!("Found {:}", self.name);
+		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_int_reg_imm_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
@@ -367,10 +371,10 @@ impl Insn
 				self.name = String::from("slti");
 			},
 
-			_ => (),
+			_ => todo!("reg imm: {:}", self.func3),
 		}
 
-		println!("Found {:}", self.name);
+		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_store_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
@@ -432,10 +436,10 @@ impl Insn
 				let _ = platform_bus.write(address as usize, tmp as u8);
 			},
 
-			_ => (),
+			_ => todo!("store: {:}", self.func3),
 		}
 
-		println!("Found {:}", self.name);
+		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_load_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
@@ -499,11 +503,11 @@ impl Insn
 			},
 
 			_ => {
-				return;
+				todo!("load: {:}", self.func3);
 			},
 		}
 
-		println!("Found {:}", self.name);
+		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_csr_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
@@ -551,10 +555,10 @@ impl Insn
 				}
 			},
 
-			_ => (),
+			_ => todo!("csr: {:}", self.func3),
 		}
 
-		println!("Found {:}", self.name);
+		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_jump_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
@@ -597,10 +601,8 @@ impl Insn
 				hart.pc = target;
 			},
 
-			_ => (),
+			_ => todo!("jump"),
 		}
-
-		println!("Found {:}", self.name);
 	}
 
 	fn handle_auipc_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
@@ -611,7 +613,7 @@ impl Insn
 		let tmp: i64 = self.imm.try_into().unwrap();
 		hart.write_register(self.rd as usize, hart.pc.wrapping_add_signed(tmp));
 
-		println!("Found {:}", self.name);
+		debug_println!("{:}: added {:} to {:}", self.name, self.imm, hart.pc);
 	}
 
 	pub fn handle(&mut self, platform: &mut Platform)
@@ -647,9 +649,13 @@ impl Insn
 				self.handle_jump_insn(arc);
 			},
 
+			OPCODE_MISCMEM => {
+				debug_println!("fence.i");
+			},
+
 			_ => {
-				println!("unimplemented instruction {:x}", self.opcode);
-				dump_unimplemented_insn(&self, arc);
+				debug_println!("unimplemented instruction {:x}", self.opcode);
+				dump_unimplemented_insn(self, arc);
 				panic!();
 			},
 		}
@@ -661,7 +667,7 @@ impl Insn
 fn dump_unimplemented_insn(insn: &Insn, platform: Arc<RwLock<&mut Platform>>)
 {
 	let hart = &mut (platform.write().unwrap()).hart;
-	println!(
+	debug_println!(
 		"insn {:?}\n hart registers {:?}\n pc {:x}",
 		insn,
 		hart.registers,
