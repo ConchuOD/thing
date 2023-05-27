@@ -622,15 +622,32 @@ impl Insn
 		}
 	}
 
-	fn handle_auipc_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_ui_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
-		// @Johan: AUIPC is "add upper immediate to program counter"
-		self.name = String::from("auipc");
-		let tmp: i64 = self.imm.try_into().unwrap();
-		hart.write_register(self.rd as usize, hart.pc.wrapping_add_signed(tmp));
 
-		debug_println!("auipc: added {:x} to {:x}", self.imm, hart.pc);
+		match self.opcode {
+			OPCODE_AUIPC => {
+				self.name = String::from("auipc");
+				let tmp: i64 = self.imm.try_into().unwrap();
+				hart.write_register(
+					self.rd as usize,
+					hart.pc.wrapping_add_signed(tmp),
+				);
+
+				debug_println!("auipc: added {:x} to {:x}", self.imm, hart.pc);
+			},
+
+			OPCODE_LUI => {
+				self.name = String::from("lui");
+				let tmp: i64 = self.imm.try_into().unwrap();
+				hart.write_register(self.rd as usize, tmp as u64);
+
+				debug_println!("lui: put {:x} in {:x}", self.imm, self.rd);
+			},
+
+			_ => todo!("upper imm"),
+		}
 	}
 
 	fn increment_pc(&self, platform: &Arc<RwLock<&mut Platform>>)
@@ -646,8 +663,8 @@ impl Insn
 		let arc = Arc::new(std::sync::RwLock::new(platform));
 
 		match self.opcode {
-			OPCODE_AUIPC => {
-				self.handle_auipc_insn(&arc);
+			OPCODE_LUI | OPCODE_AUIPC => {
+				self.handle_ui_insn(&arc);
 			},
 
 			OPCODE_INT_REG_REG => {
