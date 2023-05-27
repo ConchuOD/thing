@@ -249,7 +249,7 @@ impl Insn
 			},
 
 			_ => {
-				debug_println!("unknown opcode {:?}", self.opcode);
+				todo!("opcode {:?}", self.opcode);
 			},
 		}
 
