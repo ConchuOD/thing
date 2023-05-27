@@ -4,11 +4,12 @@
 
 use crate::bus::Bus;
 use crate::platform::Platform;
+use debug_print::debug_println;
 
 use std::sync::Arc;
 use std::sync::RwLock;
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum InsnType
 {
 	Invalid,
@@ -20,6 +21,7 @@ pub enum InsnType
 	J,
 }
 
+#[derive(Debug)]
 pub struct Insn
 {
 	pub name: String,
@@ -44,6 +46,7 @@ const OPCODE_MASK: u32 = 0b0111_1111;
 const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
 const OPCODE_JAL: u32 = 0b0110_1111;
+const OPCODE_JALR: u32 = 0b0110_0111;
 
 const OPCODE_STORE: u32 = 0b010_0011;
 const OPCODE_LOAD: u32 = 0b000_0011;
@@ -84,6 +87,38 @@ const IMM2_SHIFT_STYPE: u32 = 25;
 const IMM2_WIDTH_STYPE: u32 = 7;
 const IMM2_MASK_STYPE: u32 =
 	gen_mask!(IMM2_SHIFT_STYPE + IMM2_WIDTH_STYPE - 1, IMM2_SHIFT_STYPE, u32);
+
+const IMM10_1_SHIFT_JTYPE: u32 = 21;
+const IMM10_1_WIDTH_JTYPE: u32 = 10;
+const IMM10_1_MASK_JTYPE: u32 = gen_mask!(
+	IMM10_1_SHIFT_JTYPE + IMM10_1_WIDTH_JTYPE - 1,
+	IMM10_1_SHIFT_JTYPE,
+	u32
+);
+
+const IMM11_SHIFT_JTYPE: u32 = 20;
+const IMM11_WIDTH_JTYPE: u32 = 1;
+const IMM11_MASK_JTYPE: u32 = gen_mask!(
+	IMM11_SHIFT_JTYPE + IMM11_WIDTH_JTYPE - 1,
+	IMM11_SHIFT_JTYPE,
+	u32
+);
+
+const IMM19_12_SHIFT_JTYPE: u32 = 12;
+const IMM19_12_WIDTH_JTYPE: u32 = 8;
+const IMM19_12_MASK_JTYPE: u32 = gen_mask!(
+	IMM19_12_SHIFT_JTYPE + IMM19_12_WIDTH_JTYPE - 1,
+	IMM19_12_SHIFT_JTYPE,
+	u32
+);
+
+const IMM20_SHIFT_JTYPE: u32 = 31;
+const IMM20_WIDTH_JTYPE: u32 = 1;
+const IMM20_MASK_JTYPE: u32 = gen_mask!(
+	IMM20_SHIFT_JTYPE + IMM20_WIDTH_JTYPE - 1,
+	IMM20_SHIFT_JTYPE,
+	u32
+);
 
 const FUNC3_SHIFT_ITYPE: u32 = 12;
 const FUNC3_WIDTH_ITYPE: u32 = 3;
@@ -183,6 +218,10 @@ impl Insn
 				self.insn_type = InsnType::J;
 			},
 
+			OPCODE_JALR => {
+				self.insn_type = InsnType::I;
+			},
+
 			OPCODE_INT_REG_IMM => {
 				self.insn_type = InsnType::I;
 			},
@@ -235,6 +274,22 @@ impl Insn
 				let lower_imm = (input & IMM_MASK_STYPE) >> IMM_SHIFT_STYPE;
 				let upper_imm = (input & IMM2_MASK_STYPE) >> IMM2_SHIFT_STYPE;
 				self.imm = ((upper_imm << IMM_WIDTH_STYPE) | lower_imm) as i32;
+			},
+
+			InsnType::J => {
+				self.rd = (input & RD_MASK) >> RD_SHIFT;
+
+				let imm_10_1 =
+					(input & IMM10_1_MASK_JTYPE) >> IMM10_1_SHIFT_JTYPE;
+				let imm_11 = (input & IMM11_MASK_JTYPE) >> IMM11_SHIFT_JTYPE;
+				let imm_19_12 =
+					(input & IMM19_12_MASK_JTYPE) >> IMM19_12_SHIFT_JTYPE;
+				let imm_20 = (input & IMM20_MASK_JTYPE) >> IMM20_SHIFT_JTYPE;
+
+				self.imm |= (imm_10_1 << 1) as i32;
+				self.imm |= (imm_11 << 11) as i32;
+				self.imm |= (imm_19_12 << 12) as i32;
+				self.imm |= (imm_20 << 20) as i32;
 			},
 
 			_ => (),
@@ -502,6 +557,52 @@ impl Insn
 		println!("Found {:}", self.name);
 	}
 
+	fn handle_jump_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
+	{
+		let hart = &mut (platform.write().unwrap()).hart;
+
+		match self.opcode {
+			OPCODE_JAL => {
+				self.name = String::from("jal");
+				let tmp: i64 = self.imm.try_into().unwrap();
+				let target: u64 = hart.pc.wrapping_add_signed(tmp);
+
+				debug_println!(
+					"Jumping to {:x} (imm: {:x}) from {:x}",
+					target,
+					tmp,
+					hart.pc
+				);
+
+				hart.write_register(self.rd as usize, hart.pc + 4);
+				hart.pc = target;
+			},
+
+			OPCODE_JALR => {
+				self.name = String::from("jalr");
+				let tmp: i64 = self.imm.try_into().unwrap();
+				let base: u64 = hart.read_register(self.rs1 as usize);
+				let mut target: u64 = base.wrapping_add_signed(tmp);
+				target &= gen_mask!(63, 1, u64);
+
+				debug_println!(
+					"Jumping to {:x} (base: {:x} imm: {:x}) from {:x}",
+					target,
+					base,
+					tmp,
+					hart.pc
+				);
+
+				hart.write_register(self.rd as usize, hart.pc + 4);
+				hart.pc = target;
+			},
+
+			_ => (),
+		}
+
+		println!("Found {:}", self.name);
+	}
+
 	fn handle_auipc_insn(&mut self, platform: Arc<RwLock<&mut Platform>>)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
@@ -542,13 +643,30 @@ impl Insn
 				self.handle_csr_insn(arc);
 			},
 
+			OPCODE_JAL | OPCODE_JALR => {
+				self.handle_jump_insn(arc);
+			},
+
 			_ => {
 				println!("unimplemented instruction {:x}", self.opcode);
+				dump_unimplemented_insn(&self, arc);
+				panic!();
 			},
 		}
 
 		return;
 	}
+}
+
+fn dump_unimplemented_insn(insn: &Insn, platform: Arc<RwLock<&mut Platform>>)
+{
+	let hart = &mut (platform.write().unwrap()).hart;
+	println!(
+		"insn {:?}\n hart registers {:?}\n pc {:x}",
+		insn,
+		hart.registers,
+		hart.pc
+	);
 }
 
 impl From<u32> for Insn

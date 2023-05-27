@@ -65,6 +65,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "debug_print"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f215f9b7224f49fb73256115331f677d868b34d18b65dbe4db392e6021eea90"
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -192,6 +198,7 @@ name = "thing"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "debug_print",
 ]
 
 [[package]]
