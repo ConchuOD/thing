@@ -630,7 +630,7 @@ impl Insn
 		let tmp: i64 = self.imm.try_into().unwrap();
 		hart.write_register(self.rd as usize, hart.pc.wrapping_add_signed(tmp));
 
-		debug_println!("{:}: added {:} to {:}", self.name, self.imm, hart.pc);
+		debug_println!("auipc: added {:x} to {:x}", self.imm, hart.pc);
 	}
 
 	fn increment_pc(&self, platform: &Arc<RwLock<&mut Platform>>)
