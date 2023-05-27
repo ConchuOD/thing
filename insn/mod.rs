@@ -249,7 +249,7 @@ impl Insn
 			},
 
 			_ => {
-				todo!("opcode {:?}", self.opcode);
+				todo!("opcode 0b{:b}", self.opcode);
 			},
 		}
 
