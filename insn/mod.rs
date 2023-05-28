@@ -107,10 +107,6 @@ const IMM20_JTYPE_SHIFT: u32 = 31;
 const IMM20_JTYPE_WIDTH: u32 = 1;
 const IMM20_JTYPE_MASK: u32 = insn_mask!(IMM20_JTYPE);
 
-const FUNC3_ITYPE_SHIFT: u32 = 12;
-const FUNC3_ITYPE_WIDTH: u32 = 3;
-const FUNC3_ITYPE_MASK: u32 = insn_mask!(FUNC3_ITYPE);
-
 const IMM4_1_BTYPE_SHIFT: u32 = 8;
 const IMM4_1_BTYPE_WIDTH: u32 = 4;
 const IMM4_1_BTYPE_MASK: u32 = insn_mask!(IMM4_1_BTYPE);
@@ -123,6 +119,10 @@ const IMM10_5_BTYPE_MASK: u32 = insn_mask!(IMM10_5_BTYPE);
 const IMM12_BTYPE_SHIFT: u32 = 31;
 const IMM12_BTYPE_WIDTH: u32 = 1;
 const IMM12_BTYPE_MASK: u32 = insn_mask!(IMM12_BTYPE);
+
+const FUNC3_SHIFT: u32 = 12;
+const FUNC3_WIDTH: u32 = 3;
+const FUNC3_MASK: u32 = insn_mask!(FUNC3);
 
 // this should be an enum, right? (or not, there's dupes!)
 const FUNC3_ADDI: u32 = 0b000;
@@ -170,9 +170,9 @@ const FUNC3_BGE: u32 = 0b101;
 const FUNC3_BLTU: u32 = 0b110;
 const FUNC3_BGEU: u32 = 0b111;
 
-const FUNC7_ITYPE_SHIFT: u32 = IMM11_5_STYPE_SHIFT;
-const FUNC7_ITYPE_WIDTH: u32 = IMM11_5_STYPE_WIDTH;
-const FUNC7_ITYPE_MASK: u32 = IMM11_5_STYPE_MASK;
+const FUNC7_SHIFT: u32 = IMM11_5_STYPE_SHIFT;
+const FUNC7_WIDTH: u32 = IMM11_5_STYPE_WIDTH;
+const FUNC7_MASK: u32 = IMM11_5_STYPE_MASK;
 
 const FUNC7_SLLI: u32 = 0b0000000;
 const FUNC7_SRLI: u32 = 0b0000000;
@@ -268,21 +268,21 @@ impl Insn
 				self.imm = field_get!(input, IMM_ITYPE, i32);
 				self.rd = field_get!(input, RD, u32);
 				self.rs1 = field_get!(input, RS1, u32);
-				self.func3 = field_get!(input, FUNC3_ITYPE, u32);
+				self.func3 = field_get!(input, FUNC3, u32);
 			},
 
 			InsnType::R => {
 				self.rd = field_get!(input, RD, u32);
 				self.rs1 = field_get!(input, RS1, u32);
 				self.rs2 = field_get!(input, RS2, u32);
-				self.func3 = field_get!(input, FUNC3_ITYPE, u32);
-				self.func7 = field_get!(input, FUNC7_ITYPE, u32);
+				self.func3 = field_get!(input, FUNC3, u32);
+				self.func7 = field_get!(input, FUNC7, u32);
 			},
 
 			InsnType::S => {
 				self.rs1 = field_get!(input, RS1, u32);
 				self.rs2 = field_get!(input, RS2, u32);
-				self.func3 = field_get!(input, FUNC3_ITYPE, u32);
+				self.func3 = field_get!(input, FUNC3, u32);
 
 				let lower_imm = field_get!(input, IMM4_0_STYPE, u32);
 				let upper_imm = field_get!(input, IMM11_5_STYPE, u32);
@@ -294,7 +294,7 @@ impl Insn
 			InsnType::B => {
 				self.rs1 = field_get!(input, RS1, u32);
 				self.rs2 = field_get!(input, RS2, u32);
-				self.func3 = field_get!(input, FUNC3_ITYPE, u32);
+				self.func3 = field_get!(input, FUNC3, u32);
 
 				let imm_4_1 = field_get!(input, IMM4_1_BTYPE, u32);
 				let imm_10_5 = field_get!(input, IMM10_5_BTYPE, u32);
