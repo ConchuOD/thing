@@ -654,7 +654,8 @@ impl Insn
 		match self.opcode {
 			OPCODE_JAL => {
 				self.name = String::from("jal");
-				let tmp: i64 = self.imm.try_into().unwrap();
+				let mut tmp: i64 = self.imm.try_into().unwrap();
+				tmp = tmp.wrapping_shl(44).wrapping_shr(44);
 				let target: u64 = hart.pc.wrapping_add_signed(tmp);
 
 				debug_println!(
@@ -670,7 +671,8 @@ impl Insn
 
 			OPCODE_JALR => {
 				self.name = String::from("jalr");
-				let tmp: i64 = self.imm.try_into().unwrap();
+				let mut tmp: i64 = self.imm.try_into().unwrap();
+				tmp = tmp.wrapping_shl(52).wrapping_shr(52);
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let mut target: u64 = base.wrapping_add_signed(tmp);
 				target &= gen_mask!(63, 1, u64);
@@ -749,6 +751,7 @@ impl Insn
 		}
 
 		if offset != 0 {
+			offset = offset.wrapping_shl(52).wrapping_shr(52);
 			hart.pc = hart.pc.wrapping_add_signed(offset as i64);
 			debug_println!("Branching to {:x}", hart.pc);
 		} else {
