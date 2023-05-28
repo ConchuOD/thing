@@ -8,6 +8,7 @@ use clap::Parser;
 use platform::Platform;
 use std::fs;
 
+mod bitfield;
 mod bus;
 mod hart;
 mod insn;

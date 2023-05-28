@@ -3,6 +3,7 @@
 #![allow(clippy::needless_return)]
 
 use crate::bus::Bus;
+use crate::gen_mask;
 use crate::platform::Platform;
 use debug_print::debug_println;
 
@@ -33,13 +34,6 @@ pub struct Insn
 	pub func3: u32,
 	pub func7: u32,
 	pub insn_type: InsnType,
-}
-
-macro_rules! gen_mask {
-	($h:expr, $l:expr, $typ:ty) => {
-		(((!0) - (1_u64.wrapping_shl($l)) + 1)
-			& (!0 & (!0_u64 >> (64 - 1 - ($h)) as u64))) as $typ
-	};
 }
 
 macro_rules! insn_mask {
