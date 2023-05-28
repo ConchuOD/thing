@@ -3,6 +3,7 @@
 #![allow(clippy::needless_return)]
 
 use crate::bus::Bus;
+use crate::field_get;
 use crate::gen_mask;
 use crate::platform::Platform;
 use debug_print::debug_println;
@@ -260,47 +261,45 @@ impl Insn
 		match self.insn_type {
 			InsnType::U => {
 				self.imm = (input & IMM_UTYPE_MASK) as i32;
-				self.rd = (input & RD_MASK) >> RD_SHIFT;
+				self.rd = field_get!(input, RD, u32);
 			},
 
 			InsnType::I => {
-				self.imm = ((input & IMM_ITYPE_MASK) >> IMM_ITYPE_SHIFT) as i32;
-				self.rd = (input & RD_MASK) >> RD_SHIFT;
-				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
-				self.func3 = (input & FUNC3_ITYPE_MASK) >> FUNC3_ITYPE_SHIFT;
+				self.imm = field_get!(input, IMM_ITYPE, i32);
+				self.rd = field_get!(input, RD, u32);
+				self.rs1 = field_get!(input, RS1, u32);
+				self.func3 = field_get!(input, FUNC3_ITYPE, u32);
 			},
 
 			InsnType::R => {
-				self.rd = (input & RD_MASK) >> RD_SHIFT;
-				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
-				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
-				self.func3 = (input & FUNC3_ITYPE_MASK) >> FUNC3_ITYPE_SHIFT;
-				self.func7 = (input & FUNC7_ITYPE_MASK) >> FUNC7_ITYPE_SHIFT;
+				self.rd = field_get!(input, RD, u32);
+				self.rs1 = field_get!(input, RS1, u32);
+				self.rs2 = field_get!(input, RS2, u32);
+				self.func3 = field_get!(input, FUNC3_ITYPE, u32);
+				self.func7 = field_get!(input, FUNC7_ITYPE, u32);
 			},
 
 			InsnType::S => {
-				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
-				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
-				self.func3 = (input & FUNC3_ITYPE_MASK) >> FUNC3_ITYPE_SHIFT;
+				self.rs1 = field_get!(input, RS1, u32);
+				self.rs2 = field_get!(input, RS2, u32);
+				self.func3 = field_get!(input, FUNC3_ITYPE, u32);
 
-				let lower_imm =
-					(input & IMM4_0_STYPE_MASK) >> IMM4_0_STYPE_SHIFT;
-				let upper_imm =
-					(input & IMM11_5_STYPE_MASK) >> IMM11_5_STYPE_SHIFT;
+				let lower_imm = field_get!(input, IMM4_0_STYPE, u32);
+				let upper_imm = field_get!(input, IMM11_5_STYPE, u32);
+
 				self.imm =
 					((upper_imm << IMM4_0_STYPE_WIDTH) | lower_imm) as i32;
 			},
 
 			InsnType::B => {
-				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
-				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
-				self.func3 = (input & FUNC3_ITYPE_MASK) >> FUNC3_ITYPE_SHIFT;
+				self.rs1 = field_get!(input, RS1, u32);
+				self.rs2 = field_get!(input, RS2, u32);
+				self.func3 = field_get!(input, FUNC3_ITYPE, u32);
 
-				let imm_4_1 = (input & IMM4_1_BTYPE_MASK) >> IMM4_1_BTYPE_SHIFT;
-				let imm_10_5 =
-					(input & IMM10_5_BTYPE_MASK) >> IMM10_5_BTYPE_SHIFT;
-				let imm_11 = (input & IMM11_BTYPE_MASK) >> IMM11_BTYPE_SHIFT;
-				let imm_12 = (input & IMM12_BTYPE_MASK) >> IMM12_BTYPE_SHIFT;
+				let imm_4_1 = field_get!(input, IMM4_1_BTYPE, u32);
+				let imm_10_5 = field_get!(input, IMM10_5_BTYPE, u32);
+				let imm_11 = field_get!(input, IMM11_BTYPE, u32);
+				let imm_12 = field_get!(input, IMM12_BTYPE, u32);
 
 				self.imm |= (imm_4_1 << 1) as i32;
 				self.imm |= (imm_10_5 << 5) as i32;
@@ -309,14 +308,12 @@ impl Insn
 			},
 
 			InsnType::J => {
-				self.rd = (input & RD_MASK) >> RD_SHIFT;
+				self.rd = field_get!(input, RD, u32);
 
-				let imm_10_1 =
-					(input & IMM10_1_JTYPE_MASK) >> IMM10_1_JTYPE_SHIFT;
-				let imm_11 = (input & IMM11_JTYPE_MASK) >> IMM11_JTYPE_SHIFT;
-				let imm_19_12 =
-					(input & IMM19_12_JTYPE_MASK) >> IMM19_12_JTYPE_SHIFT;
-				let imm_20 = (input & IMM20_JTYPE_MASK) >> IMM20_JTYPE_SHIFT;
+				let imm_10_1 = field_get!(input, IMM10_1_JTYPE, u32);
+				let imm_11 = field_get!(input, IMM11_JTYPE, u32);
+				let imm_19_12 = field_get!(input, IMM19_12_JTYPE, u32);
+				let imm_20 = field_get!(input, IMM20_JTYPE, u32);
 
 				self.imm |= (imm_10_1 << 1) as i32;
 				self.imm |= (imm_11 << 11) as i32;
