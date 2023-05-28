@@ -290,7 +290,7 @@ impl Insn
 		match self.insn_type {
 			InsnType::U => {
 				self.imm = (input & IMM_MASK_UTYPE) as i32;
-				self.rd = input & RD_MASK >> RD_SHIFT;
+				self.rd = (input & RD_MASK) >> RD_SHIFT;
 			},
 
 			InsnType::I => {
