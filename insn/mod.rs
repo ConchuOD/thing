@@ -42,10 +42,16 @@ macro_rules! gen_mask {
 	};
 }
 
-macro_rules! imm_mask {
+macro_rules! insn_mask {
 	($yo:ident, $typ:ident) => {{
 		let start = concat_idents!($yo, _SHIFT_, $typ);
 		let width = concat_idents!($yo, _WIDTH_, $typ);
+		gen_mask!(start + width - 1, start, u32)
+	}};
+
+	($yo:ident) => {{
+		let start = concat_idents!($yo, _SHIFT);
+		let width = concat_idents!($yo, _WIDTH);
 		gen_mask!(start + width - 1, start, u32)
 	}};
 }
@@ -70,88 +76,64 @@ const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
 
 const RD_SHIFT: u32 = 7;
 const RD_WIDTH: u32 = 5;
-const RD_MASK: u32 = gen_mask!(RD_SHIFT + RD_WIDTH - 1, RD_SHIFT, u32);
+const RD_MASK: u32 = insn_mask!(RD);
 
 const RS1_SHIFT: u32 = 15;
 const RS1_WIDTH: u32 = 5;
-const RS1_MASK: u32 = gen_mask!(RS1_SHIFT + RS1_WIDTH - 1, RS1_SHIFT, u32);
+const RS1_MASK: u32 = insn_mask!(RS1);
 
 const RS2_SHIFT: u32 = 20;
 const RS2_WIDTH: u32 = 5;
-const RS2_MASK: u32 = gen_mask!(RS2_SHIFT + RS2_WIDTH - 1, RS2_SHIFT, u32);
+const RS2_MASK: u32 = insn_mask!(RS2);
 
 const IMM_SHIFT_UTYPE: u32 = 12;
 const IMM_WIDTH_UTYPE: u32 = 20;
-const IMM_MASK_UTYPE: u32 =
-	gen_mask!(IMM_SHIFT_UTYPE + IMM_WIDTH_UTYPE - 1, IMM_SHIFT_UTYPE, u32);
+const IMM_MASK_UTYPE: u32 = insn_mask!(IMM, UTYPE);
 
 const IMM_SHIFT_ITYPE: u32 = 20;
 const IMM_WIDTH_ITYPE: u32 = 12;
-const IMM_MASK_ITYPE: u32 =
-	gen_mask!(IMM_SHIFT_ITYPE + IMM_WIDTH_ITYPE - 1, IMM_SHIFT_ITYPE, u32);
+const IMM_MASK_ITYPE: u32 = insn_mask!(IMM, ITYPE);
 
-const IMM_SHIFT_STYPE: u32 = RD_SHIFT;
-const IMM_WIDTH_STYPE: u32 = RD_WIDTH;
-const IMM_MASK_STYPE: u32 =
-	gen_mask!(IMM_SHIFT_STYPE + IMM_WIDTH_STYPE - 1, IMM_SHIFT_STYPE, u32);
+const IMM4_0_SHIFT_STYPE: u32 = RD_SHIFT;
+const IMM4_0_WIDTH_STYPE: u32 = RD_WIDTH;
+const IMM4_0_MASK_STYPE: u32 = insn_mask!(IMM4_0, STYPE);
 
-const IMM2_SHIFT_STYPE: u32 = 25;
-const IMM2_WIDTH_STYPE: u32 = 7;
-const IMM2_MASK_STYPE: u32 =
-	gen_mask!(IMM2_SHIFT_STYPE + IMM2_WIDTH_STYPE - 1, IMM2_SHIFT_STYPE, u32);
+const IMM11_5_SHIFT_STYPE: u32 = 25;
+const IMM11_5_WIDTH_STYPE: u32 = 7;
+const IMM11_5_MASK_STYPE: u32 = insn_mask!(IMM11_5, STYPE);
 
 const IMM10_1_SHIFT_JTYPE: u32 = 21;
 const IMM10_1_WIDTH_JTYPE: u32 = 10;
-const IMM10_1_MASK_JTYPE: u32 = gen_mask!(
-	IMM10_1_SHIFT_JTYPE + IMM10_1_WIDTH_JTYPE - 1,
-	IMM10_1_SHIFT_JTYPE,
-	u32
-);
+const IMM10_1_MASK_JTYPE: u32 = insn_mask!(IMM10_1, JTYPE);
 
 const IMM11_SHIFT_JTYPE: u32 = 20;
 const IMM11_WIDTH_JTYPE: u32 = 1;
-const IMM11_MASK_JTYPE: u32 = gen_mask!(
-	IMM11_SHIFT_JTYPE + IMM11_WIDTH_JTYPE - 1,
-	IMM11_SHIFT_JTYPE,
-	u32
-);
+const IMM11_MASK_JTYPE: u32 = insn_mask!(IMM11, JTYPE);
 
 const IMM19_12_SHIFT_JTYPE: u32 = 12;
 const IMM19_12_WIDTH_JTYPE: u32 = 8;
-const IMM19_12_MASK_JTYPE: u32 = gen_mask!(
-	IMM19_12_SHIFT_JTYPE + IMM19_12_WIDTH_JTYPE - 1,
-	IMM19_12_SHIFT_JTYPE,
-	u32
-);
+const IMM19_12_MASK_JTYPE: u32 = insn_mask!(IMM19_12, JTYPE);
 
 const IMM20_SHIFT_JTYPE: u32 = 31;
 const IMM20_WIDTH_JTYPE: u32 = 1;
-const IMM20_MASK_JTYPE: u32 = gen_mask!(
-	IMM20_SHIFT_JTYPE + IMM20_WIDTH_JTYPE - 1,
-	IMM20_SHIFT_JTYPE,
-	u32
-);
+const IMM20_MASK_JTYPE: u32 = insn_mask!(IMM20, JTYPE);
 
 const FUNC3_SHIFT_ITYPE: u32 = 12;
 const FUNC3_WIDTH_ITYPE: u32 = 3;
-const FUNC3_MASK_ITYPE: u32 = gen_mask!(
-	FUNC3_SHIFT_ITYPE + FUNC3_WIDTH_ITYPE - 1,
-	FUNC3_SHIFT_ITYPE,
-	u32
-);
+const FUNC3_MASK_ITYPE: u32 = insn_mask!(FUNC3, ITYPE);
 
 const IMM4_1_SHIFT_BTYPE: u32 = 8;
 const IMM4_1_WIDTH_BTYPE: u32 = 4;
-const IMM4_1_MASK_BTYPE: u32 = imm_mask!(IMM4_1, BTYPE);
+const IMM4_1_MASK_BTYPE: u32 = insn_mask!(IMM4_1, BTYPE);
 const IMM11_SHIFT_BTYPE: u32 = 7;
 const IMM11_WIDTH_BTYPE: u32 = 1;
-const IMM11_MASK_BTYPE: u32 = imm_mask!(IMM11, BTYPE);
+const IMM11_MASK_BTYPE: u32 = insn_mask!(IMM11, BTYPE);
 const IMM10_5_SHIFT_BTYPE: u32 = 25;
 const IMM10_5_WIDTH_BTYPE: u32 = 6;
-const IMM10_5_MASK_BTYPE: u32 = imm_mask!(IMM10_5, BTYPE);
+const IMM10_5_MASK_BTYPE: u32 = insn_mask!(IMM10_5, BTYPE);
 const IMM12_SHIFT_BTYPE: u32 = 31;
 const IMM12_WIDTH_BTYPE: u32 = 1;
-const IMM12_MASK_BTYPE: u32 = imm_mask!(IMM12, BTYPE);
+const IMM12_MASK_BTYPE: u32 = insn_mask!(IMM12, BTYPE);
 
 // this should be an enum, right? (or not, there's dupes!)
 const FUNC3_ADDI: u32 = 0b000;
@@ -199,9 +181,9 @@ const FUNC3_BGE: u32 = 0b101;
 const FUNC3_BLTU: u32 = 0b110;
 const FUNC3_BGEU: u32 = 0b111;
 
-const FUNC7_SHIFT_ITYPE: u32 = IMM2_SHIFT_STYPE;
-const FUNC7_WIDTH_ITYPE: u32 = IMM2_WIDTH_STYPE;
-const FUNC7_MASK_ITYPE: u32 = IMM2_MASK_STYPE;
+const FUNC7_SHIFT_ITYPE: u32 = IMM11_5_SHIFT_STYPE;
+const FUNC7_WIDTH_ITYPE: u32 = IMM11_5_WIDTH_STYPE;
+const FUNC7_MASK_ITYPE: u32 = IMM11_5_MASK_STYPE;
 
 const FUNC7_SLLI: u32 = 0b0000000;
 const FUNC7_SRLI: u32 = 0b0000000;
@@ -313,9 +295,12 @@ impl Insn
 				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
 				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
 
-				let lower_imm = (input & IMM_MASK_STYPE) >> IMM_SHIFT_STYPE;
-				let upper_imm = (input & IMM2_MASK_STYPE) >> IMM2_SHIFT_STYPE;
-				self.imm = ((upper_imm << IMM_WIDTH_STYPE) | lower_imm) as i32;
+				let lower_imm =
+					(input & IMM4_0_MASK_STYPE) >> IMM4_0_SHIFT_STYPE;
+				let upper_imm =
+					(input & IMM11_5_MASK_STYPE) >> IMM11_5_SHIFT_STYPE;
+				self.imm =
+					((upper_imm << IMM4_0_WIDTH_STYPE) | lower_imm) as i32;
 			},
 
 			InsnType::B => {
@@ -773,7 +758,12 @@ impl Insn
 					hart.pc.wrapping_add_signed(tmp),
 				);
 
-				debug_println!("auipc: added {:x} to {:x} and stored in {:x}", self.imm, hart.pc, self.rd);
+				debug_println!(
+					"auipc: added {:x} to {:x} and stored in {:x}",
+					self.imm,
+					hart.pc,
+					self.rd
+				);
 			},
 
 			OPCODE_LUI => {
@@ -791,12 +781,12 @@ impl Insn
 	fn increment_pc(&self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		match self.opcode {
-			OPCODE_JAL | OPCODE_JALR | OPCODE_BRANCH => {
+			OPCODE_JAL | OPCODE_JALR | OPCODE_BRANCH => (),
+
+			_ => {
 				let hart = &mut (platform.write().unwrap()).hart;
 				hart.pc += 4;
 			},
-
-			_ => (),
 		}
 	}
 
