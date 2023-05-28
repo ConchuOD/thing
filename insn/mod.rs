@@ -773,7 +773,7 @@ impl Insn
 					hart.pc.wrapping_add_signed(tmp),
 				);
 
-				debug_println!("auipc: added {:x} to {:x}", self.imm, hart.pc);
+				debug_println!("auipc: added {:x} to {:x} and stored in {:x}", self.imm, hart.pc, self.rd);
 			},
 
 			OPCODE_LUI => {
