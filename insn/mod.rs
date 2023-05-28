@@ -37,12 +37,6 @@ pub struct Insn
 }
 
 macro_rules! insn_mask {
-	($yo:ident, $typ:ident) => {{
-		let start = concat_idents!($yo, _SHIFT_, $typ);
-		let width = concat_idents!($yo, _WIDTH_, $typ);
-		gen_mask!(start + width - 1, start, u32)
-	}};
-
 	($yo:ident) => {{
 		let start = concat_idents!($yo, _SHIFT);
 		let width = concat_idents!($yo, _WIDTH);
@@ -80,54 +74,54 @@ const RS2_SHIFT: u32 = 20;
 const RS2_WIDTH: u32 = 5;
 const RS2_MASK: u32 = insn_mask!(RS2);
 
-const IMM_SHIFT_UTYPE: u32 = 12;
-const IMM_WIDTH_UTYPE: u32 = 20;
-const IMM_MASK_UTYPE: u32 = insn_mask!(IMM, UTYPE);
+const IMM_UTYPE_SHIFT: u32 = 12;
+const IMM_UTYPE_WIDTH: u32 = 20;
+const IMM_UTYPE_MASK: u32 = insn_mask!(IMM_UTYPE);
 
-const IMM_SHIFT_ITYPE: u32 = 20;
-const IMM_WIDTH_ITYPE: u32 = 12;
-const IMM_MASK_ITYPE: u32 = insn_mask!(IMM, ITYPE);
+const IMM_ITYPE_SHIFT: u32 = 20;
+const IMM_ITYPE_WIDTH: u32 = 12;
+const IMM_ITYPE_MASK: u32 = insn_mask!(IMM_ITYPE);
 
-const IMM4_0_SHIFT_STYPE: u32 = RD_SHIFT;
-const IMM4_0_WIDTH_STYPE: u32 = RD_WIDTH;
-const IMM4_0_MASK_STYPE: u32 = insn_mask!(IMM4_0, STYPE);
+const IMM4_0_STYPE_SHIFT: u32 = RD_SHIFT;
+const IMM4_0_STYPE_WIDTH: u32 = RD_WIDTH;
+const IMM4_0_STYPE_MASK: u32 = insn_mask!(IMM4_0_STYPE);
 
-const IMM11_5_SHIFT_STYPE: u32 = 25;
-const IMM11_5_WIDTH_STYPE: u32 = 7;
-const IMM11_5_MASK_STYPE: u32 = insn_mask!(IMM11_5, STYPE);
+const IMM11_5_STYPE_SHIFT: u32 = 25;
+const IMM11_5_STYPE_WIDTH: u32 = 7;
+const IMM11_5_STYPE_MASK: u32 = insn_mask!(IMM11_5_STYPE);
 
-const IMM10_1_SHIFT_JTYPE: u32 = 21;
-const IMM10_1_WIDTH_JTYPE: u32 = 10;
-const IMM10_1_MASK_JTYPE: u32 = insn_mask!(IMM10_1, JTYPE);
+const IMM10_1_JTYPE_SHIFT: u32 = 21;
+const IMM10_1_JTYPE_WIDTH: u32 = 10;
+const IMM10_1_JTYPE_MASK: u32 = insn_mask!(IMM10_1_JTYPE);
 
-const IMM11_SHIFT_JTYPE: u32 = 20;
-const IMM11_WIDTH_JTYPE: u32 = 1;
-const IMM11_MASK_JTYPE: u32 = insn_mask!(IMM11, JTYPE);
+const IMM11_JTYPE_SHIFT: u32 = 20;
+const IMM11_JTYPE_WIDTH: u32 = 1;
+const IMM11_JTYPE_MASK: u32 = insn_mask!(IMM11_JTYPE);
 
-const IMM19_12_SHIFT_JTYPE: u32 = 12;
-const IMM19_12_WIDTH_JTYPE: u32 = 8;
-const IMM19_12_MASK_JTYPE: u32 = insn_mask!(IMM19_12, JTYPE);
+const IMM19_12_JTYPE_SHIFT: u32 = 12;
+const IMM19_12_JTYPE_WIDTH: u32 = 8;
+const IMM19_12_JTYPE_MASK: u32 = insn_mask!(IMM19_12_JTYPE);
 
-const IMM20_SHIFT_JTYPE: u32 = 31;
-const IMM20_WIDTH_JTYPE: u32 = 1;
-const IMM20_MASK_JTYPE: u32 = insn_mask!(IMM20, JTYPE);
+const IMM20_JTYPE_SHIFT: u32 = 31;
+const IMM20_JTYPE_WIDTH: u32 = 1;
+const IMM20_JTYPE_MASK: u32 = insn_mask!(IMM20_JTYPE);
 
-const FUNC3_SHIFT_ITYPE: u32 = 12;
-const FUNC3_WIDTH_ITYPE: u32 = 3;
-const FUNC3_MASK_ITYPE: u32 = insn_mask!(FUNC3, ITYPE);
+const FUNC3_ITYPE_SHIFT: u32 = 12;
+const FUNC3_ITYPE_WIDTH: u32 = 3;
+const FUNC3_ITYPE_MASK: u32 = insn_mask!(FUNC3_ITYPE);
 
-const IMM4_1_SHIFT_BTYPE: u32 = 8;
-const IMM4_1_WIDTH_BTYPE: u32 = 4;
-const IMM4_1_MASK_BTYPE: u32 = insn_mask!(IMM4_1, BTYPE);
-const IMM11_SHIFT_BTYPE: u32 = 7;
-const IMM11_WIDTH_BTYPE: u32 = 1;
-const IMM11_MASK_BTYPE: u32 = insn_mask!(IMM11, BTYPE);
-const IMM10_5_SHIFT_BTYPE: u32 = 25;
-const IMM10_5_WIDTH_BTYPE: u32 = 6;
-const IMM10_5_MASK_BTYPE: u32 = insn_mask!(IMM10_5, BTYPE);
-const IMM12_SHIFT_BTYPE: u32 = 31;
-const IMM12_WIDTH_BTYPE: u32 = 1;
-const IMM12_MASK_BTYPE: u32 = insn_mask!(IMM12, BTYPE);
+const IMM4_1_BTYPE_SHIFT: u32 = 8;
+const IMM4_1_BTYPE_WIDTH: u32 = 4;
+const IMM4_1_BTYPE_MASK: u32 = insn_mask!(IMM4_1_BTYPE);
+const IMM11_BTYPE_SHIFT: u32 = 7;
+const IMM11_BTYPE_WIDTH: u32 = 1;
+const IMM11_BTYPE_MASK: u32 = insn_mask!(IMM11_BTYPE);
+const IMM10_5_BTYPE_SHIFT: u32 = 25;
+const IMM10_5_BTYPE_WIDTH: u32 = 6;
+const IMM10_5_BTYPE_MASK: u32 = insn_mask!(IMM10_5_BTYPE);
+const IMM12_BTYPE_SHIFT: u32 = 31;
+const IMM12_BTYPE_WIDTH: u32 = 1;
+const IMM12_BTYPE_MASK: u32 = insn_mask!(IMM12_BTYPE);
 
 // this should be an enum, right? (or not, there's dupes!)
 const FUNC3_ADDI: u32 = 0b000;
@@ -175,9 +169,9 @@ const FUNC3_BGE: u32 = 0b101;
 const FUNC3_BLTU: u32 = 0b110;
 const FUNC3_BGEU: u32 = 0b111;
 
-const FUNC7_SHIFT_ITYPE: u32 = IMM11_5_SHIFT_STYPE;
-const FUNC7_WIDTH_ITYPE: u32 = IMM11_5_WIDTH_STYPE;
-const FUNC7_MASK_ITYPE: u32 = IMM11_5_MASK_STYPE;
+const FUNC7_ITYPE_SHIFT: u32 = IMM11_5_STYPE_SHIFT;
+const FUNC7_ITYPE_WIDTH: u32 = IMM11_5_STYPE_WIDTH;
+const FUNC7_ITYPE_MASK: u32 = IMM11_5_STYPE_MASK;
 
 const FUNC7_SLLI: u32 = 0b0000000;
 const FUNC7_SRLI: u32 = 0b0000000;
@@ -265,48 +259,48 @@ impl Insn
 
 		match self.insn_type {
 			InsnType::U => {
-				self.imm = (input & IMM_MASK_UTYPE) as i32;
+				self.imm = (input & IMM_UTYPE_MASK) as i32;
 				self.rd = (input & RD_MASK) >> RD_SHIFT;
 			},
 
 			InsnType::I => {
-				self.imm = ((input & IMM_MASK_ITYPE) >> IMM_SHIFT_ITYPE) as i32;
+				self.imm = ((input & IMM_ITYPE_MASK) >> IMM_ITYPE_SHIFT) as i32;
 				self.rd = (input & RD_MASK) >> RD_SHIFT;
 				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
-				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
+				self.func3 = (input & FUNC3_ITYPE_MASK) >> FUNC3_ITYPE_SHIFT;
 			},
 
 			InsnType::R => {
 				self.rd = (input & RD_MASK) >> RD_SHIFT;
 				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
 				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
-				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
-				self.func7 = (input & FUNC7_MASK_ITYPE) >> FUNC7_SHIFT_ITYPE;
+				self.func3 = (input & FUNC3_ITYPE_MASK) >> FUNC3_ITYPE_SHIFT;
+				self.func7 = (input & FUNC7_ITYPE_MASK) >> FUNC7_ITYPE_SHIFT;
 			},
 
 			InsnType::S => {
 				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
 				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
-				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
+				self.func3 = (input & FUNC3_ITYPE_MASK) >> FUNC3_ITYPE_SHIFT;
 
 				let lower_imm =
-					(input & IMM4_0_MASK_STYPE) >> IMM4_0_SHIFT_STYPE;
+					(input & IMM4_0_STYPE_MASK) >> IMM4_0_STYPE_SHIFT;
 				let upper_imm =
-					(input & IMM11_5_MASK_STYPE) >> IMM11_5_SHIFT_STYPE;
+					(input & IMM11_5_STYPE_MASK) >> IMM11_5_STYPE_SHIFT;
 				self.imm =
-					((upper_imm << IMM4_0_WIDTH_STYPE) | lower_imm) as i32;
+					((upper_imm << IMM4_0_STYPE_WIDTH) | lower_imm) as i32;
 			},
 
 			InsnType::B => {
 				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
 				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
-				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
+				self.func3 = (input & FUNC3_ITYPE_MASK) >> FUNC3_ITYPE_SHIFT;
 
-				let imm_4_1 = (input & IMM4_1_MASK_BTYPE) >> IMM4_1_SHIFT_BTYPE;
+				let imm_4_1 = (input & IMM4_1_BTYPE_MASK) >> IMM4_1_BTYPE_SHIFT;
 				let imm_10_5 =
-					(input & IMM10_5_MASK_BTYPE) >> IMM10_5_SHIFT_BTYPE;
-				let imm_11 = (input & IMM11_MASK_BTYPE) >> IMM11_SHIFT_BTYPE;
-				let imm_12 = (input & IMM12_MASK_BTYPE) >> IMM12_SHIFT_BTYPE;
+					(input & IMM10_5_BTYPE_MASK) >> IMM10_5_BTYPE_SHIFT;
+				let imm_11 = (input & IMM11_BTYPE_MASK) >> IMM11_BTYPE_SHIFT;
+				let imm_12 = (input & IMM12_BTYPE_MASK) >> IMM12_BTYPE_SHIFT;
 
 				self.imm |= (imm_4_1 << 1) as i32;
 				self.imm |= (imm_10_5 << 5) as i32;
@@ -318,11 +312,11 @@ impl Insn
 				self.rd = (input & RD_MASK) >> RD_SHIFT;
 
 				let imm_10_1 =
-					(input & IMM10_1_MASK_JTYPE) >> IMM10_1_SHIFT_JTYPE;
-				let imm_11 = (input & IMM11_MASK_JTYPE) >> IMM11_SHIFT_JTYPE;
+					(input & IMM10_1_JTYPE_MASK) >> IMM10_1_JTYPE_SHIFT;
+				let imm_11 = (input & IMM11_JTYPE_MASK) >> IMM11_JTYPE_SHIFT;
 				let imm_19_12 =
-					(input & IMM19_12_MASK_JTYPE) >> IMM19_12_SHIFT_JTYPE;
-				let imm_20 = (input & IMM20_MASK_JTYPE) >> IMM20_SHIFT_JTYPE;
+					(input & IMM19_12_JTYPE_MASK) >> IMM19_12_JTYPE_SHIFT;
+				let imm_20 = (input & IMM20_JTYPE_MASK) >> IMM20_JTYPE_SHIFT;
 
 				self.imm |= (imm_10_1 << 1) as i32;
 				self.imm |= (imm_11 << 11) as i32;
