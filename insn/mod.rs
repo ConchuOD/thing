@@ -42,6 +42,14 @@ macro_rules! gen_mask {
 	};
 }
 
+macro_rules! imm_mask {
+	($yo:ident, $typ:ident) => {{
+		let start = concat_idents!($yo, _SHIFT_, $typ);
+		let width = concat_idents!($yo, _WIDTH_, $typ);
+		gen_mask!(start + width - 1, start, u32)
+	}};
+}
+
 const OPCODE_MASK: u32 = 0b0111_1111;
 const OPCODE_LUI: u32 = 0b0011_0111;
 const OPCODE_AUIPC: u32 = 0b0001_0111;
@@ -54,6 +62,8 @@ const OPCODE_LOAD: u32 = 0b000_0011;
 const OPCODE_SYSTEM: u32 = 0b111_0011;
 
 const OPCODE_MISCMEM: u32 = 0b000_1111;
+
+const OPCODE_BRANCH: u32 = 0b110_0011;
 
 const OPCODE_INT_REG_IMM: u32 = 0b0001_0011;
 const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
@@ -130,6 +140,19 @@ const FUNC3_MASK_ITYPE: u32 = gen_mask!(
 	u32
 );
 
+const IMM4_1_SHIFT_BTYPE: u32 = 8;
+const IMM4_1_WIDTH_BTYPE: u32 = 4;
+const IMM4_1_MASK_BTYPE: u32 = imm_mask!(IMM4_1, BTYPE);
+const IMM11_SHIFT_BTYPE: u32 = 7;
+const IMM11_WIDTH_BTYPE: u32 = 1;
+const IMM11_MASK_BTYPE: u32 = imm_mask!(IMM11, BTYPE);
+const IMM10_5_SHIFT_BTYPE: u32 = 25;
+const IMM10_5_WIDTH_BTYPE: u32 = 6;
+const IMM10_5_MASK_BTYPE: u32 = imm_mask!(IMM10_5, BTYPE);
+const IMM12_SHIFT_BTYPE: u32 = 31;
+const IMM12_WIDTH_BTYPE: u32 = 1;
+const IMM12_MASK_BTYPE: u32 = imm_mask!(IMM12, BTYPE);
+
 // this should be an enum, right? (or not, there's dupes!)
 const FUNC3_ADDI: u32 = 0b000;
 const FUNC3_SLTI: u32 = 0b010;
@@ -168,6 +191,13 @@ const FUNC3_CSRRC: u32 = 0b011;
 const FUNC3_CSRRWI: u32 = 0b101;
 const FUNC3_CSRRSI: u32 = 0b110;
 const FUNC3_CSRRCI: u32 = 0b111;
+
+const FUNC3_BEQ: u32 = 0b000;
+const FUNC3_BNE: u32 = 0b001;
+const FUNC3_BLT: u32 = 0b100;
+const FUNC3_BGE: u32 = 0b101;
+const FUNC3_BLTU: u32 = 0b110;
+const FUNC3_BGEU: u32 = 0b111;
 
 const FUNC7_SHIFT_ITYPE: u32 = IMM2_SHIFT_STYPE;
 const FUNC7_WIDTH_ITYPE: u32 = IMM2_WIDTH_STYPE;
@@ -248,8 +278,12 @@ impl Insn
 				self.insn_type = InsnType::I;
 			},
 
+			OPCODE_BRANCH => {
+				self.insn_type = InsnType::B;
+			},
+
 			_ => {
-				todo!("opcode 0b{:b}", self.opcode);
+				todo!("opcode 0b{:b} .insn 0x{:x}", self.opcode, input);
 			},
 		}
 
@@ -282,6 +316,23 @@ impl Insn
 				let lower_imm = (input & IMM_MASK_STYPE) >> IMM_SHIFT_STYPE;
 				let upper_imm = (input & IMM2_MASK_STYPE) >> IMM2_SHIFT_STYPE;
 				self.imm = ((upper_imm << IMM_WIDTH_STYPE) | lower_imm) as i32;
+			},
+
+			InsnType::B => {
+				self.rs1 = (input & RS1_MASK) >> RS1_SHIFT;
+				self.rs2 = (input & RS2_MASK) >> RS2_SHIFT;
+				self.func3 = (input & FUNC3_MASK_ITYPE) >> FUNC3_SHIFT_ITYPE;
+
+				let imm_4_1 = (input & IMM4_1_MASK_BTYPE) >> IMM4_1_SHIFT_BTYPE;
+				let imm_10_5 =
+					(input & IMM10_5_MASK_BTYPE) >> IMM10_5_SHIFT_BTYPE;
+				let imm_11 = (input & IMM11_MASK_BTYPE) >> IMM11_SHIFT_BTYPE;
+				let imm_12 = (input & IMM12_MASK_BTYPE) >> IMM12_SHIFT_BTYPE;
+
+				self.imm |= (imm_4_1 << 1) as i32;
+				self.imm |= (imm_10_5 << 5) as i32;
+				self.imm |= (imm_11 << 11) as i32;
+				self.imm |= (imm_12 << 12) as i32;
 			},
 
 			InsnType::J => {
@@ -638,6 +689,72 @@ impl Insn
 
 			_ => todo!("jump"),
 		}
+
+		debug_println!("Found {:}", self.name);
+	}
+
+	fn handle_branch_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		let hart = &mut (platform.write().unwrap()).hart;
+		let src1: u64 = hart.read_register(self.rs1 as usize);
+		let src2: u64 = hart.read_register(self.rs2 as usize);
+		let mut offset: i32 = 0;
+
+		match self.func3 {
+			FUNC3_BEQ => {
+				self.name = String::from("beq");
+				if src1 == src2 {
+					offset = self.imm;
+				}
+			},
+
+			FUNC3_BNE => {
+				self.name = String::from("beq");
+				if src1 != src2 {
+					offset = self.imm;
+				}
+			},
+
+			FUNC3_BLT => {
+				self.name = String::from("blt");
+				if (src1 as i64) < (src2 as i64) {
+					offset = self.imm;
+				}
+			},
+
+			FUNC3_BLTU => {
+				self.name = String::from("bltu");
+				if src1 < src2 {
+					offset = self.imm;
+				}
+			},
+
+			FUNC3_BGE => {
+				self.name = String::from("bge");
+				if (src1 as i64) >= (src2 as i64) {
+					offset = self.imm;
+				}
+			},
+
+			FUNC3_BGEU => {
+				self.name = String::from("bgeu");
+				if src1 >= src2 {
+					offset = self.imm;
+				}
+			},
+
+			_ => {
+				todo!("branch w/ func3 {:b}", self.func3);
+			},
+		}
+
+		if offset != 0 {
+			hart.pc = hart.pc.wrapping_add_signed(offset as i64);
+			debug_println!("Branching to {:x}", hart.pc);
+		} else {
+			debug_println!("Branch not taken @ {:?} {:b}", hart.pc, self.func3);
+			hart.pc += 4;
+		}
 	}
 
 	fn handle_ui_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -670,9 +787,13 @@ impl Insn
 
 	fn increment_pc(&self, platform: &Arc<RwLock<&mut Platform>>)
 	{
-		if (self.opcode != OPCODE_JAL) && (self.opcode != OPCODE_JALR) {
-			let hart = &mut (platform.write().unwrap()).hart;
-			hart.pc += 4;
+		match self.opcode {
+			OPCODE_JAL | OPCODE_JALR | OPCODE_BRANCH => {
+				let hart = &mut (platform.write().unwrap()).hart;
+				hart.pc += 4;
+			},
+
+			_ => (),
 		}
 	}
 
@@ -711,6 +832,10 @@ impl Insn
 
 			OPCODE_MISCMEM => {
 				debug_println!("fence.i");
+			},
+
+			OPCODE_BRANCH => {
+				self.handle_branch_insn(&arc);
 			},
 
 			_ => {
