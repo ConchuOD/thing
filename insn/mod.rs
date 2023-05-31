@@ -60,6 +60,8 @@ const OPCODE_MISCMEM: u32 = 0b000_1111;
 
 const OPCODE_BRANCH: u32 = 0b110_0011;
 
+const OPCODE_INT_REG_IMM32: u32 = 0b001_1011;
+
 const OPCODE_INT_REG_IMM: u32 = 0b0001_0011;
 const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
 
@@ -145,6 +147,15 @@ const FUNC3_SRL: u32 = 0b101;
 const FUNC3_SRA: u32 = 0b101;
 const FUNC3_OR: u32 = 0b110;
 const FUNC3_AND: u32 = 0b111;
+const FUNC3_ADDIW: u32 = 0b000;
+const FUNC3_SLLIW: u32 = 0b001;
+const FUNC3_SRLIW: u32 = 0b101;
+const FUNC3_SRAIW: u32 = 0b101;
+const FUNC3_ADDW: u32 = 0b000;
+const FUNC3_SUBW: u32 = 0b000;
+const FUNC3_SLLW: u32 = 0b001;
+const FUNC3_SRLW: u32 = 0b101;
+const FUNC3_SRAW: u32 = 0b101;
 
 const FUNC3_SB: u32 = 0b000;
 const FUNC3_SH: u32 = 0b001;
@@ -253,6 +264,15 @@ impl Insn
 				self.insn_type = InsnType::B;
 			},
 
+			OPCODE_INT_REG_IMM32 => {
+				let func3 = field_get!(input, FUNC3, u32);
+				if func3 == 0 {
+					self.insn_type = InsnType::I;
+				} else {
+					self.insn_type = InsnType::R;
+				}
+			},
+
 			_ => {
 				todo!("opcode 0b{:b} .insn 0x{:x}", self.opcode, input);
 			},
@@ -331,7 +351,7 @@ impl Insn
 
 		match self.func3 {
 			FUNC3_ADD => {
-				if self.func7 != 0 {
+				if self.func7 == FUNC7_ADD {
 					self.name = String::from("add");
 					// ADD adds the value in rs1 to rs2 and stores
 					// the result in rd
@@ -390,9 +410,44 @@ impl Insn
 
 			FUNC3_SLTI => {
 				self.name = String::from("slti");
+				todo!("slti");
 			},
 
 			_ => todo!("reg imm: {:}", self.func3),
+		}
+
+		debug_println!("Found {:}", self.name);
+	}
+
+	fn handle_int_reg_imm32_insn(
+		&mut self, platform: &Arc<RwLock<&mut Platform>>,
+	)
+	{
+		let hart = &mut (platform.write().unwrap()).hart;
+
+		match self.func3 {
+			FUNC3_ADDIW => {
+				if self.imm == 0 {
+					self.name = String::from("sextw");
+				} else {
+					self.name = String::from("addiw");
+				}
+
+				// ADDIW adds the sign-extended 12-bit immediate
+				// to register rs1 & stores the sign extension
+				// of a 32-bit result in rd. Arithmetic overflow
+				// is ignored and the result is simply the low
+				// 32-bit of the result sign extended to 64-bits
+				let mut tmp: u64 = hart.read_register(self.rs1 as usize);
+				let mut imm: i64 = self.imm.try_into().unwrap();
+				imm = imm.wrapping_shl(52).wrapping_shr(52);
+				tmp = tmp.wrapping_add_signed(imm);
+				tmp &= gen_mask!(31, 0, u64);
+				tmp = (tmp as i64).wrapping_shl(32).wrapping_shr(32) as u64;
+				hart.write_register(self.rd as usize, tmp);
+			},
+
+			_ => todo!("reg imm32: {:}", self.func3),
 		}
 
 		debug_println!("Found {:}", self.name);
@@ -814,6 +869,10 @@ impl Insn
 
 			OPCODE_BRANCH => {
 				self.handle_branch_insn(&arc);
+			},
+
+			OPCODE_INT_REG_IMM32 => {
+				self.handle_int_reg_imm32_insn(&arc);
 			},
 
 			_ => {
