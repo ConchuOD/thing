@@ -65,6 +65,8 @@ const OPCODE_INT_REG_IMM32: u32 = 0b001_1011;
 const OPCODE_INT_REG_IMM: u32 = 0b0001_0011;
 const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
 
+const OPCODE_ATOMIC: u32 = 0b010_1111;
+
 const RD_SHIFT: u32 = 7;
 const RD_WIDTH: u32 = 5;
 const RD_MASK: u32 = insn_mask!(RD);
@@ -184,6 +186,9 @@ const FUNC3_BGE: u32 = 0b101;
 const FUNC3_BLTU: u32 = 0b110;
 const FUNC3_BGEU: u32 = 0b111;
 
+const FUNC3_RV32_ATOMIC: u32 = 0b010;
+const FUNC3_RV64_ATOMIC: u32 = 0b011;
+
 const FUNC7_SHIFT: u32 = IMM11_5_STYPE_SHIFT;
 const FUNC7_WIDTH: u32 = IMM11_5_STYPE_WIDTH;
 const FUNC7_MASK: u32 = IMM11_5_STYPE_MASK;
@@ -201,6 +206,18 @@ const FUNC7_SRL: u32 = 0b0000000;
 const FUNC7_SRA: u32 = 0b0100000;
 const FUNC7_OR: u32 = 0b0000000;
 const FUNC7_AND: u32 = 0b0000000;
+
+const FUNC7_LR: u32 = 0b0001000;
+const FUNC7_SC: u32 = 0b0001100;
+const FUNC7_AMOSWAP: u32 = 0b0000100;
+const FUNC7_AMOADD: u32 = 0b0000000;
+const FUNC7_AMOXOR: u32 = 0b0010000;
+const FUNC7_AMOAND: u32 = 0b0110000;
+const FUNC7_AMOOR: u32 = 0b0100000;
+const FUNC7_AMOMIN: u32 = 0b1000000;
+const FUNC7_AMOMAX: u32 = 0b1010000;
+const FUNC7_AMOMINU: u32 = 0b1100000;
+const FUNC7_AMOMAXU: u32 = 0b1110000;
 
 impl Default for Insn
 {
@@ -265,6 +282,10 @@ impl Insn
 
 			OPCODE_BRANCH => {
 				self.insn_type = InsnType::B;
+			},
+
+			OPCODE_ATOMIC => {
+				self.insn_type = InsnType::R;
 			},
 
 			OPCODE_INT_REG_IMM32 => {
@@ -850,6 +871,119 @@ impl Insn
 		}
 	}
 
+	fn handle_atomic_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		if self.func3 == FUNC3_RV32_ATOMIC {
+			self.handle_atomic_rv32_insn(platform);
+		} else {
+			self.handle_atomic_rv64_insn(platform);
+		}
+	}
+
+	fn handle_atomic_rv64_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		let platform_bus = &mut platform.write().unwrap();
+
+		// Quoting the spec:
+		// AMO instructions atomically load a data value from the
+		// address in rs1, place the value into register rd, apply a
+		// binary operator to the loaded value and the original value
+		// in rs2, then store the result back to the address in rs1
+		// I am just ignoring aq/rl here, because this system is super
+		// trivial, and a lock is taken for all memory access anyway
+		let address: u64 = platform_bus.hart.read_register(self.rs1 as usize);
+		let mut val: u64 = platform_bus.read(address as usize).unwrap();
+		platform_bus.hart.write_register(self.rd as usize, val);
+		let other_val: u64 = platform_bus.hart.read_register(self.rs2 as usize);
+
+		match self.func7 & gen_mask!(6, 2, u32) {
+			FUNC7_AMOADD => {
+				self.name = String::from("amoadd");
+				val += other_val;
+			},
+
+			FUNC7_AMOAND => {
+				self.name = String::from("amoand");
+				val &= other_val;
+			},
+
+			FUNC7_AMOOR => {
+				self.name = String::from("amoor");
+				val |= other_val;
+			},
+
+			FUNC7_AMOXOR => {
+				self.name = String::from("amoadd");
+				val ^= other_val;
+			},
+
+			FUNC7_AMOSWAP => {
+				self.name = String::from("amoswap");
+				val = other_val;
+			},
+
+			_ => todo!("atomic {:b}", (self.func7 & gen_mask!(6, 2, u32)) >> 2),
+		}
+
+		let _ = platform_bus.write(address as usize, val);
+
+		debug_println!("Found {:}", self.name);
+	}
+
+	fn handle_atomic_rv32_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		let platform_bus = &mut platform.write().unwrap();
+
+		// Quoting the spec:
+		// AMO instructions atomically load a data value from the
+		// address in rs1, place the value into register rd, apply a
+		// binary operator to the loaded value and the original value
+		// in rs2, then store the result back to the address in rs1
+		// I am just ignoring aq/rl here, because this system is super
+		// trivial, and a lock is taken for all memory access anyway
+		let address: u64 = platform_bus.hart.read_register(self.rs1 as usize);
+		let mut val: u32 = platform_bus.read(address as usize).unwrap();
+		let rd: u64 = (val as u64).wrapping_shl(32).wrapping_shr(32);
+		platform_bus.hart.write_register(self.rd as usize, rd);
+		// check this to make sure the mask is okay to do
+		let other_val: u32 =
+			(platform_bus.hart.read_register(self.rs2 as usize)
+				& gen_mask!(31, 0, u64)) as u32;
+
+		match self.func7 & gen_mask!(6, 2, u32) {
+			FUNC7_AMOADD => {
+				self.name = String::from("amoadd");
+				val += other_val;
+			},
+
+			FUNC7_AMOAND => {
+				self.name = String::from("amoand");
+				val &= other_val;
+			},
+
+			FUNC7_AMOOR => {
+				self.name = String::from("amoor");
+				val |= other_val;
+			},
+
+			FUNC7_AMOXOR => {
+				self.name = String::from("amoadd");
+				val ^= other_val;
+			},
+
+			FUNC7_AMOSWAP => {
+				self.name = String::from("amoswap");
+				val = other_val;
+			},
+
+			_ => todo!("atomic {:b}", (self.func7 & gen_mask!(6, 2, u32)) >> 2),
+		}
+
+		let _ = platform_bus.write(address as usize, val);
+
+		debug_println!("Found {:}", self.name);
+	}
+
 	fn increment_pc(&self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		match self.opcode {
@@ -907,9 +1041,14 @@ impl Insn
 				self.handle_int_reg_imm32_insn(&arc);
 			},
 
+			OPCODE_ATOMIC => {
+				dump_unimplemented_insn(self, &arc);
+				self.handle_atomic_insn(&arc);
+			},
+
 			_ => {
 				debug_println!("unimplemented instruction {:x}", self.opcode);
-				dump_unimplemented_insn(self, arc);
+				dump_unimplemented_insn(self, &arc);
 				panic!();
 			},
 		}
@@ -920,7 +1059,7 @@ impl Insn
 	}
 }
 
-fn dump_unimplemented_insn(insn: &Insn, platform: Arc<RwLock<&mut Platform>>)
+fn dump_unimplemented_insn(insn: &Insn, platform: &Arc<RwLock<&mut Platform>>)
 {
 	let hart = &mut (platform.write().unwrap()).hart;
 	debug_println!(
