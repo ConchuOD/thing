@@ -39,28 +39,30 @@ impl Platform
 			));
 		}
 
-		let elf_end = load_address + blob.len();
-		if elf_end > memory.end {
+		let blob_end = load_address + blob.len();
+		if blob_end > memory.end {
 			return Err(Box::<dyn Error>::from(
 				"insufficient memory for blob".to_string(),
 			));
 		}
 
-		memory.memory[load_address..elf_end].copy_from_slice(&blob[..]);
+		let memory_load_offset = load_address - memory.start;
+		let memory_load_end = memory_load_offset + blob.len();
+		memory.memory[memory_load_offset..memory_load_end]
+			.copy_from_slice(&blob[..]);
 
 		return Ok(());
 	}
 
 	pub fn emulate(&mut self) -> Result<(), Box<dyn Error>>
 	{
-		let mut pc = self.hart.pc as usize;
 		loop {
+			let pc = self.hart.pc as usize - self.memory.start;
 			let insn_bits: &[u8] = &self.memory.memory[pc..(pc + 4)];
 			let insn: u32 = u8s_to_insn(insn_bits.try_into()?);
 			let mut insn: Insn = Insn::from(insn);
 
 			insn.handle(self);
-			pc += 4;
 		}
 	}
 }
@@ -100,7 +102,7 @@ impl Bus for Platform
 	}
 }
 
-const MEMORY_BASE: usize = 0x0;
+const MEMORY_BASE: usize = 0x8000_0000;
 const MEMORY_SIZE: usize = 0x1000_0000;
 const MEMORY_END: usize = MEMORY_BASE + MEMORY_SIZE;
 

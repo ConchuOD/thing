@@ -39,6 +39,7 @@ pub enum RegisterNames
 	t6,
 }
 
+#[derive(Debug)]
 pub struct Hart
 {
 	pub registers: [u64; 32],
