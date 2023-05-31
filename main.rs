@@ -20,37 +20,53 @@ mod platform;
 #[clap(author, version, about, long_about = None)]
 struct Args
 {
-	/// input binary
+	/// kernel
 	#[clap(short, long, default_value = "vmlinux")]
-	blob: String,
+	kernel: String,
 
-	/// load address
-	#[clap(short, long)]
-	load_address: Option<usize>,
+	/// kernel load address
+	#[clap(long)]
+	kernel_load_address: Option<usize>,
 
 	/// entry point
-	#[clap(short, long)]
+	#[clap(long)]
 	entry_point: Option<usize>,
+
+	/// dtb
+	#[clap(short, long, default_value = "emu.dtb")]
+	dtb: String,
+
+	/// dtb load address
+	#[clap(long)]
+	dtb_load_address: Option<usize>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>>
 {
 	let args = Args::parse();
-	let mut blob: Vec<u8> = fs::read(args.blob)?;
-	let mut load_address: usize = 0x8000_0000;
-	let mut entry_point: usize = load_address;
+	let mut kernel: Vec<u8> = fs::read(args.kernel)?;
+	let dtb: Vec<u8> = fs::read(args.dtb)?;
+	let mut kernel_load_address: usize = 0x8000_0000;
+	let mut entry_point: usize = kernel_load_address;
 
-	if args.load_address.is_some() {
-		load_address = args.load_address.unwrap();
+	if args.kernel_load_address.is_some() {
+		kernel_load_address = args.kernel_load_address.unwrap();
 	}
+
+	let mut dtb_load_address = kernel_load_address + dtb.len();
 
 	if args.entry_point.is_some() {
 		entry_point = args.entry_point.unwrap();
 	}
 
+	if args.dtb_load_address.is_some() {
+		dtb_load_address = args.dtb_load_address.unwrap();
+	}
+
 	let mut platform: Platform = Platform::default();
 
-	let stripped_blob: Vec<u8> = blob.split_off(0x1000);
-	platform.load_file(stripped_blob, load_address, entry_point)?;
+	let stripped_blob: Vec<u8> = kernel.split_off(0x1000);
+	platform.load_dtb(dtb, dtb_load_address)?;
+	platform.load_kernel(stripped_blob, kernel_load_address, entry_point)?;
 	return platform.emulate();
 }
