@@ -3,7 +3,7 @@
 #![allow(clippy::needless_return)]
 
 use crate::bus::{self, Bus};
-use crate::hart::Hart;
+use crate::hart::{Hart, RegisterNames};
 use crate::insn::Insn;
 use crate::lebytes::LeBytes;
 use std::error::Error;
@@ -25,24 +25,41 @@ pub struct Platform
 
 impl Platform
 {
-	pub fn load_file(
-		&mut self, blob: Vec<u8>, load_address: usize, entry_point: usize,
+	pub fn load_dtb(
+		&mut self, dtb: Vec<u8>, load_address: usize,
+	) -> Result<(), Box<dyn Error>>
+	{
+		self.load_file(dtb, load_address)?;
+
+		self.hart.registers[RegisterNames::a1 as usize] = load_address as u64;
+
+		return Ok(());
+	}
+
+	pub fn load_kernel(
+		&mut self, kernel: Vec<u8>, load_address: usize, entry_point: usize,
 	) -> Result<(), Box<dyn Error>>
 	{
 		self.hart.pc = entry_point as u64;
+		return self.load_file(kernel, load_address);
+	}
 
+	fn load_file(
+		&mut self, blob: Vec<u8>, load_address: usize,
+	) -> Result<(), Box<dyn Error>>
+	{
 		let memory = &mut self.memory;
 
 		if !(memory.start..memory.end).contains(&load_address) {
 			return Err(Box::<dyn Error>::from(
-				"load address out of bounds".to_string(),
+				"kernel load address out of bounds".to_string(),
 			));
 		}
 
 		let blob_end = load_address + blob.len();
 		if blob_end > memory.end {
 			return Err(Box::<dyn Error>::from(
-				"insufficient memory for blob".to_string(),
+				"insufficient memory for kernel".to_string(),
 			));
 		}
 
