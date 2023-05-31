@@ -647,6 +647,19 @@ impl Insn
 				hart.write_register(self.rd as usize, csr_val);
 			},
 
+			FUNC3_CSRRSI => {
+				// Like CSRRS, but uses an intermediate from
+				// rs1 instead of reading from a register,
+				// limiting it to the lower 5 bits.
+				self.name = String::from("csrrsi");
+				let mask: u64 = self.rs1 as u64;
+				let csr_val: u64 = hart.read_csr(self.imm as usize);
+				if mask != 0 {
+					hart.write_csr(self.imm as usize, csr_val | mask);
+				}
+				hart.write_register(self.rd as usize, csr_val);
+			},
+
 			FUNC3_CSRRC => {
 				// Quoting the spec:
 				// CSRRC instruction reads the value of the CSR
@@ -663,6 +676,19 @@ impl Insn
 				let csr_val: u64 = hart.read_csr(self.imm as usize);
 				let mask = !hart.read_register(self.rs1 as usize);
 				hart.write_csr(self.imm as usize, csr_val & mask);
+				hart.write_register(self.rd as usize, csr_val);
+			},
+
+			FUNC3_CSRRCI => {
+				// Like CSRRC, but uses an intermediate from
+				// rs1 instead of reading from a register,
+				// limiting it to the lower 5 bits.
+				self.name = String::from("csrrci");
+				let csr_val: u64 = hart.read_csr(self.imm as usize);
+				let mask: u64 = !(self.rs1 as u64);
+				if mask != u64::MAX {
+					hart.write_csr(self.imm as usize, csr_val & mask);
+				}
 				hart.write_register(self.rd as usize, csr_val);
 			},
 
