@@ -61,8 +61,11 @@ impl Default for Hart
 
 impl Hart
 {
-	pub fn write_register(&mut self, offset: usize, value: u64)
+	pub fn write_register<T>(&mut self, offset: T, value: u64)
+	where
+		T: Into<usize>,
 	{
+		let offset = usize::try_from(offset).unwrap();
 		if offset == 0 {
 			return;
 		}
@@ -70,8 +73,11 @@ impl Hart
 		self.registers[offset] = value;
 	}
 
-	pub fn read_register(&self, offset: usize) -> u64
+	pub fn read_register<T>(&self, offset: T) -> u64
+	where
+		T: Into<usize>,
 	{
+		let offset = usize::try_from(offset).unwrap();
 		if offset == 0 {
 			return 0_u64;
 		}
@@ -79,13 +85,19 @@ impl Hart
 		return self.registers[offset];
 	}
 
-	pub fn write_csr(&mut self, offset: usize, value: u64)
+	pub fn write_csr<T>(&mut self, offset: T, value: u64)
+	where
+		T: Into<usize>,
 	{
+		let offset = usize::try_from(offset).unwrap();
 		self.csrs[offset] = value;
 	}
 
-	pub fn read_csr(&self, offset: usize) -> u64
+	pub fn read_csr<T>(&self, offset: T) -> u64
+	where
+		T: Into<usize>,
 	{
+		let offset = usize::try_from(offset).unwrap();
 		return self.csrs[offset];
 	}
 }
