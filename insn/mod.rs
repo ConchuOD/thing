@@ -386,6 +386,14 @@ impl Insn
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
+		// All of these functions take the sign-extended 12-bit
+		// immediate, and use it perform some calculation register rs1.
+		// Arithmetic overflow is ignored and the result is simply the
+		// low XLEN bits of the result.
+		let mut tmp: u64 = hart.read_register(self.rs1 as usize);
+		let mut imm: i64 = self.imm.try_into().unwrap();
+		imm = imm.wrapping_shl(52).wrapping_shr(52);
+
 		match self.func3 {
 			FUNC3_ADDI => {
 				if self.imm == 0 && self.rs1 == 0 && self.rd == 0 {
@@ -397,20 +405,26 @@ impl Insn
 					self.name = String::from("addi");
 				}
 
-				// ADDI adds the sign-extended 12-bit immediate
-				// to register rs1. Arithmetic overflow is
-				// ignored and the result is simply the low XLEN
-				// bits of the result.
-				let mut tmp: u64 = hart.read_register(self.rs1 as usize);
-				let mut imm: i64 = self.imm.try_into().unwrap();
-				imm = imm.wrapping_shl(52).wrapping_shr(52);
 				tmp = tmp.wrapping_add_signed(imm);
 				hart.write_register(self.rd as usize, tmp);
 			},
 
-			FUNC3_SLTI => {
-				self.name = String::from("slti");
-				todo!("slti");
+			FUNC3_ANDI => {
+				self.name = String::from("andi");
+				tmp &= imm as u64;
+				hart.write_register(self.rd as usize, tmp);
+			},
+
+			FUNC3_ORI => {
+				self.name = String::from("ori");
+				tmp |= imm as u64;
+				hart.write_register(self.rd as usize, tmp);
+			},
+
+			FUNC3_XORI => {
+				self.name = String::from("xori");
+				tmp ^= imm as u64;
+				hart.write_register(self.rd as usize, tmp);
 			},
 
 			_ => todo!("reg imm: {:}", self.func3),
