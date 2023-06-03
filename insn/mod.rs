@@ -166,6 +166,9 @@ const FUNC3_LB: u32 = 0b000;
 const FUNC3_LH: u32 = 0b001;
 const FUNC3_LW: u32 = 0b010;
 const FUNC3_LD: u32 = 0b011;
+const FUNC3_LBU: u32 = 0b100;
+const FUNC3_LHU: u32 = 0b101;
+const FUNC3_LWU: u32 = 0b110;
 
 const FUNC3_CSRRW: u32 = 0b001;
 const FUNC3_CSRRS: u32 = 0b010;
@@ -539,19 +542,43 @@ impl Insn
 			FUNC3_LW => {
 				self.name = String::from("lw");
 				let tmp: u32 = platform_bus.read(address as usize).unwrap();
+				let extended: u64 = tmp as i32 as i64 as u64;
 				let hart = &mut (platform_bus).hart;
-				hart.write_register(self.rd as usize, tmp as u64);
+				hart.write_register(self.rd as usize, extended);
 			},
 
 			FUNC3_LH => {
 				self.name = String::from("lh");
 				let tmp: u16 = platform_bus.read(address as usize).unwrap();
+				let extended: u64 = tmp as i16 as i32 as u64;
 				let hart = &mut (platform_bus).hart;
-				hart.write_register(self.rd as usize, tmp as u64);
+				hart.write_register(self.rd as usize, extended);
 			},
 
 			FUNC3_LB => {
 				self.name = String::from("lb");
+				let tmp: u8 = platform_bus.read(address as usize).unwrap();
+				let extended: u64 = tmp as i8 as i64 as u64;
+				let hart = &mut (platform_bus).hart;
+				hart.write_register(self.rd as usize, extended);
+			},
+
+			FUNC3_LWU => {
+				self.name = String::from("lwu");
+				let tmp: u32 = platform_bus.read(address as usize).unwrap();
+				let hart = &mut (platform_bus).hart;
+				hart.write_register(self.rd as usize, tmp as u64);
+			},
+
+			FUNC3_LHU => {
+				self.name = String::from("lhu");
+				let tmp: u16 = platform_bus.read(address as usize).unwrap();
+				let hart = &mut (platform_bus).hart;
+				hart.write_register(self.rd as usize, tmp as u64);
+			},
+
+			FUNC3_LBU => {
+				self.name = String::from("lbu");
 				let tmp: u8 = platform_bus.read(address as usize).unwrap();
 				let hart = &mut (platform_bus).hart;
 				hart.write_register(self.rd as usize, tmp as u64);
