@@ -47,6 +47,7 @@ pub trait Bus
 
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), Error>
 	where
+		U: Into<usize>,
 		T: LeBytes,
 		U: Into<usize>,
 		[(); <T as LeBytes>::SIZE]:;

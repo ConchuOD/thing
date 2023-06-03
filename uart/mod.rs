@@ -3,7 +3,7 @@ use crate::{
 	lebytes::LeBytes,
 };
 
-const UART_REGISTER_SIZE: usize = 8;
+const UART_REGISTER_COUNT: usize = 8;
 
 struct Uart
 {
@@ -15,7 +15,7 @@ impl Uart
 	fn new() -> Self
 	{
 		return Self {
-			registers: vec![0u8; UART_REGISTER_SIZE],
+			registers: vec![0u8; UART_REGISTER_COUNT],
 		};
 	}
 }
@@ -45,13 +45,16 @@ impl Bus for Uart
 		));
 	}
 
-	fn write<T>(
-		&mut self, address: usize, value: T,
+	fn write<T, U>(
+		&mut self, address: U, value: T,
 	) -> std::result::Result<(), bus::Error>
 	where
+		U: Into<usize>,
 		T: crate::lebytes::LeBytes,
 		[(); <T as crate::lebytes::LeBytes>::SIZE]:,
 	{
+		let address = address.into();
+
 		let up_to_address = address + <T as LeBytes>::SIZE;
 		if up_to_address > self.registers.len() {
 			return Err(bus::Error::new(
@@ -63,9 +66,32 @@ impl Bus for Uart
 				)),
 			));
 		}
+
 		let write_range = address..up_to_address;
+		if write_range.contains(&RegisterAddress::RecieverBuffer.into()) {
+			self.registers[usize::from(RegisterAddress::LineStatus)] = 1;
+		}
+		assert_eq!(self.registers, vec![0, 0, 0, 0, 0, 1, 0, 0]);
 		self.registers.splice(write_range, value.to_le_bytes());
+
 		return Ok(());
+	}
+}
+
+enum RegisterAddress
+{
+	RecieverBuffer,
+	LineStatus,
+}
+
+impl From<RegisterAddress> for usize
+{
+	fn from(val: RegisterAddress) -> Self
+	{
+		return match val {
+			RegisterAddress::RecieverBuffer => 0usize,
+			RegisterAddress::LineStatus => 5usize,
+		};
 	}
 }
 
@@ -126,18 +152,10 @@ mod test
 			use crate::uart::Uart;
 
 			#[test]
-			fn u8()
-			{
-				let mut uart = Uart::new();
-				uart.write(0, 1u8).unwrap();
-				assert_eq!(vec![1, 0, 0, 0, 0, 0, 0, 0], uart.registers);
-			}
-
-			#[test]
 			fn u64()
 			{
 				let mut uart = Uart::new();
-				uart.write(0, 0b00000001_00000001_00000001_00000001_00000001_00000001_00000001_00000001u64).unwrap();
+				uart.write(0usize, 0b00000001_00000001_00000001_00000001_00000001_00000001_00000001_00000001u64).unwrap();
 				assert_eq!(vec![1, 1, 1, 1, 1, 1, 1, 1], uart.registers);
 			}
 
@@ -152,10 +170,27 @@ mod test
 				let expected =
 					Err(bus::Error::new(bus::ErrorKind::OutOfBounds, &msg));
 
-				let actual = uart.write(8, 1u8);
+				let actual = uart.write(8usize, 1u8);
 
 				assert_eq!(expected, actual);
 			}
+		}
+	}
+	mod line_status_register
+	{
+		use crate::bus::Bus;
+		use crate::uart::RegisterAddress;
+		use crate::uart::Uart;
+
+		#[test]
+		fn writing_data_to_reciever_buffer_register_sets_data_ready_bit()
+		{
+			let mut uart = Uart::new();
+			let expected = vec![1, 0, 0, 0, 0, 1, 0, 0];
+
+			uart.write(RegisterAddress::RecieverBuffer, 1u8).unwrap();
+
+			assert_eq!(expected, uart.registers);
 		}
 	}
 }

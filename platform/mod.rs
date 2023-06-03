@@ -104,6 +104,7 @@ impl Bus for Platform
 
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
+		U: Into<usize>,
 		T: LeBytes,
 		U: Into<usize>,
 		[(); <T as LeBytes>::SIZE]:,
@@ -174,6 +175,7 @@ impl Bus for Memory
 
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
+		U: Into<usize>,
 		T: LeBytes,
 		U: Into<usize>,
 		[(); <T as LeBytes>::SIZE]:,
