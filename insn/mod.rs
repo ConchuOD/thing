@@ -507,29 +507,46 @@ impl Insn
 		let mut tmp: u64 = hart.read_register(self.rs2 as usize);
 		drop(platform_read);
 		let platform_write = &mut platform.write().unwrap();
+		let hart_id = platform_write.hart.id;
 
 		match self.func3 {
 			FUNC3_SD => {
 				self.name = String::from("sd");
-				let _ = platform_write.write(address as usize, tmp);
+				let _ = platform_write.write_from_hart(
+					hart_id,
+					address as usize,
+					tmp,
+				);
 			},
 
 			FUNC3_SW => {
 				self.name = String::from("sw");
 				tmp &= gen_mask!(31, 0, u64);
-				let _ = platform_write.write(address as usize, tmp as u32);
+				let _ = platform_write.write_from_hart(
+					hart_id,
+					address as usize,
+					tmp as u32,
+				);
 			},
 
 			FUNC3_SH => {
 				self.name = String::from("sh");
 				tmp &= gen_mask!(15, 0, u64);
-				let _ = platform_write.write(address as usize, tmp as u16);
+				let _ = platform_write.write_from_hart(
+					hart_id,
+					address as usize,
+					tmp as u16,
+				);
 			},
 
 			FUNC3_SB => {
 				self.name = String::from("sb");
 				tmp &= gen_mask!(7, 0, u64);
-				let _ = platform_write.write(address as usize, tmp as u8);
+				let _ = platform_write.write_from_hart(
+					hart_id,
+					address as usize,
+					tmp as u8,
+				);
 			},
 
 			_ => todo!("store: {:}", self.func3),
@@ -873,11 +890,79 @@ impl Insn
 
 	fn handle_atomic_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
 	{
-		if self.func3 == FUNC3_RV32_ATOMIC {
+		let func5 = self.func7 & gen_mask!(6, 2, u32);
+		if func5 == FUNC7_LR {
+			self.handle_lr_insn(platform);
+		} else if func5 == FUNC7_SC {
+			self.handle_sc_insn(platform);
+		} else if self.func3 == FUNC3_RV32_ATOMIC {
 			self.handle_atomic_rv32_insn(platform);
 		} else {
 			self.handle_atomic_rv64_insn(platform);
 		}
+
+		debug_println!("Found {:}", self.name);
+	}
+
+	fn handle_sc_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		self.name = String::from("sc");
+		let platform_bus = &mut platform.write().unwrap();
+		let hart_id = platform_bus.hart.id;
+		let address: u64 = platform_bus.hart.read_register(self.rs1 as usize);
+		let val: u64 = platform_bus.hart.read_register(self.rs2 as usize);
+		let mut write_size = 4;
+
+		if self.func3 == 0b010 {
+			write_size = 2;
+		}
+
+		// If we do not have a reservation, then abort leaving a
+		// non-zero value in rd.
+		if !platform_bus.check_invalidate_reservation_set(
+			hart_id,
+			address as usize,
+			write_size,
+		) {
+			platform_bus.hart.write_register(self.rd as usize, 1);
+			return;
+		}
+
+		if self.func3 == 0b010 {
+			let val = (val & gen_mask!(31, 0, u64)) as u32;
+			let _ =
+				platform_bus.write_from_hart(hart_id, address as usize, val);
+		} else {
+			let _ =
+				platform_bus.write_from_hart(hart_id, address as usize, val);
+		}
+
+		platform_bus.hart.write_register(self.rd as usize, 0);
+	}
+
+	fn handle_lr_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		self.name = String::from("lr");
+		let platform_bus = &mut platform.write().unwrap();
+		let hart_id = platform_bus.hart.id;
+		let address: u64 = platform_bus.hart.read_register(self.rs1 as usize);
+		let mut read_size = 4;
+		let val: u64;
+
+		if self.func3 == 0b010 {
+			read_size = 2;
+			let tmp: u32 = platform_bus.read(address as usize).unwrap();
+			val = tmp as i32 as i64 as u64;
+		} else {
+			val = platform_bus.read(address as usize).unwrap();
+		}
+
+		platform_bus.claim_reservation_set(
+			hart_id,
+			address as usize,
+			read_size,
+		);
+		platform_bus.hart.write_register(self.rd as usize, val);
 	}
 
 	fn handle_atomic_rv64_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -925,7 +1010,8 @@ impl Insn
 			_ => todo!("atomic {:b}", (self.func7 & gen_mask!(6, 2, u32)) >> 2),
 		}
 
-		let _ = platform_bus.write(address as usize, val);
+		let hart_id = platform_bus.hart.id;
+		let _ = platform_bus.write_from_hart(hart_id, address as usize, val);
 
 		debug_println!("Found {:}", self.name);
 	}
@@ -979,7 +1065,8 @@ impl Insn
 			_ => todo!("atomic {:b}", (self.func7 & gen_mask!(6, 2, u32)) >> 2),
 		}
 
-		let _ = platform_bus.write(address as usize, val);
+		let hart_id = platform_bus.hart.id;
+		let _ = platform_bus.write_from_hart(hart_id, address as usize, val);
 
 		debug_println!("Found {:}", self.name);
 	}
@@ -1042,7 +1129,6 @@ impl Insn
 			},
 
 			OPCODE_ATOMIC => {
-				dump_unimplemented_insn(self, &arc);
 				self.handle_atomic_insn(&arc);
 			},
 

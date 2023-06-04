@@ -38,13 +38,13 @@ pub enum RegisterNames
 	t5,
 	t6,
 }
-
 #[derive(Debug)]
 pub struct Hart
 {
 	pub registers: [u64; 32],
 	pub csrs: [u64; 4096],
 	pub pc: u64,
+	pub id: usize,
 }
 
 impl Default for Hart
@@ -55,6 +55,7 @@ impl Default for Hart
 			registers: [0; 32],
 			csrs: [0; 4096],
 			pc: 0,
+			id: 0,
 		};
 	}
 }

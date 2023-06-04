@@ -16,11 +16,21 @@ fn u8s_to_insn(input: &[u8; 4]) -> u32
 		| ((input[3] as u32) << 24);
 }
 
+#[derive(Debug, Default)]
+struct ReservationSet
+{
+	pub address: usize,
+	pub size: usize,
+	pub valid: bool,
+	pub hart_id: usize,
+}
+
 #[derive(Default)]
 pub struct Platform
 {
 	pub hart: Hart,
 	memory: Memory,
+	reservation_sets: Vec<ReservationSet>,
 }
 
 impl Platform
@@ -73,6 +83,8 @@ impl Platform
 
 	pub fn emulate(&mut self) -> Result<(), Box<dyn Error>>
 	{
+		self.reservation_sets.push(ReservationSet::default());
+
 		loop {
 			let pc = self.hart.pc as usize - self.memory.start;
 			let insn_bits: &[u8] = &self.memory.memory[pc..(pc + 4)];
@@ -81,6 +93,99 @@ impl Platform
 
 			insn.handle(self);
 		}
+	}
+
+	/// Claim a reservation set for this hart, replacing any existing one.
+	/// Must be called with the bus write lock taken.
+	pub fn claim_reservation_set<T>(
+		&mut self, hart_id: usize, address: T, size: usize,
+	) where
+		T: Into<usize>,
+	{
+		// TODO; what if reservation exists?
+		let address = usize::try_from(address).unwrap();
+		let reservation_set = &mut self.reservation_sets[hart_id];
+
+		reservation_set.hart_id = hart_id;
+		reservation_set.address = address;
+		reservation_set.size = size;
+		reservation_set.valid = true;
+	}
+
+	/// Invalidates reservations taken by other harts that overlap with a
+	/// store from this hart.
+	/// Must be called with the bus write lock taken.
+	pub fn invalidate_reservation_sets<T>(
+		&mut self, hart_id: usize, address: T, size: usize,
+	) where
+		T: Into<usize>,
+	{
+		let address = usize::try_from(address).unwrap();
+
+		for reservation_set in self.reservation_sets.iter_mut() {
+			if reservation_set.hart_id == hart_id {
+				continue;
+			}
+
+			if !reservation_set.valid {
+				continue;
+			}
+
+			// We have to check that no bytes of the store intersect
+			// with the reserved region. So for a 2 byte write, we
+			// need to check that the second byte is not the first
+			// of the reservation & so on
+			let start = reservation_set.address - (size - 1);
+			let end = reservation_set.address + reservation_set.size;
+			if (start..end).contains(&address) {
+				reservation_set.valid = false;
+			}
+		}
+	}
+
+	/// Check if a reservation for this hart is still valid, and if it is,
+	/// invalidate it.
+	/// Must be called with the bus write lock taken.
+	pub fn check_invalidate_reservation_set<T>(
+		&mut self, hart_id: usize, address: T, size: usize,
+	) -> bool
+	where
+		T: Into<usize>,
+	{
+		let address = usize::try_from(address).unwrap();
+		let reservation_set = &mut self.reservation_sets[hart_id];
+		if !reservation_set.valid {
+			return false;
+		}
+
+		// We have to check that no bytes of the store intersect
+		// with the reserved region. So for a 2 byte write, we
+		// need to check that the second byte is not the first
+		// of the reservation & so on
+		let start = reservation_set.address - (size - 1);
+		let end = reservation_set.address + reservation_set.size;
+		if !(start..end).contains(&address) {
+			return false;
+		}
+
+		reservation_set.valid = false;
+		return true;
+	}
+
+	pub fn write_from_hart<T>(
+		&mut self, hart_id: usize, address: usize, value: T,
+	) -> Result<(), bus::Error>
+	where
+		T: LeBytes,
+		[(); <T as LeBytes>::SIZE]:,
+	{
+		self.invalidate_reservation_sets(
+			hart_id,
+			address,
+			<T as LeBytes>::SIZE,
+		);
+
+		return self.write(address, value);
 	}
 }
 
