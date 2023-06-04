@@ -102,11 +102,13 @@ impl Bus for Platform
 		));
 	}
 
-	fn write<T>(&mut self, address: usize, value: T) -> Result<(), bus::Error>
+	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
 		T: LeBytes,
+		U: Into<usize>,
 		[(); <T as LeBytes>::SIZE]:,
 	{
+		let address = address.into();
 		let memory = &self.memory;
 		if (memory.start..memory.end).contains(&address) {
 			return self.memory.write(address - MEMORY_BASE, value);
@@ -170,11 +172,13 @@ impl Bus for Memory
 		));
 	}
 
-	fn write<T>(&mut self, address: usize, value: T) -> Result<(), bus::Error>
+	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
 		T: LeBytes,
+		U: Into<usize>,
 		[(); <T as LeBytes>::SIZE]:,
 	{
+		let address = address.into();
 		let tmp: [u8; <T as LeBytes>::SIZE] = value.to_le_bytes();
 		self.memory[address..address + <T as LeBytes>::SIZE]
 			.copy_from_slice(&tmp[..<T as LeBytes>::SIZE]);
