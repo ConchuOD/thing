@@ -60,7 +60,7 @@ const OPCODE_MISCMEM: u32 = 0b000_1111;
 
 const OPCODE_BRANCH: u32 = 0b110_0011;
 
-const OPCODE_INT_REG_IMM32: u32 = 0b001_1011;
+const OPCODE_INT_REG_IMM_32: u32 = 0b001_1011;
 
 const OPCODE_INT_REG_IMM: u32 = 0b0001_0011;
 const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
@@ -288,7 +288,7 @@ impl Insn
 				self.insn_type = InsnType::R;
 			},
 
-			OPCODE_INT_REG_IMM32 => {
+			OPCODE_INT_REG_IMM_32 => {
 				let func3 = field_get!(input, FUNC3, u32);
 				if func3 == 0 {
 					self.insn_type = InsnType::I;
@@ -1213,7 +1213,7 @@ impl Insn
 				self.handle_branch_insn(&arc);
 			},
 
-			OPCODE_INT_REG_IMM32 => {
+			OPCODE_INT_REG_IMM_32 => {
 				self.handle_int_reg_imm32_insn(&arc);
 			},
 
