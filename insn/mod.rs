@@ -418,6 +418,11 @@ impl Insn
 		let mut imm: i64 = self.imm.try_into().unwrap();
 		imm = imm.wrapping_shl(52).wrapping_shr(52);
 
+		// shifts encode the "shamt" in the bottom 6 bits of the imm
+		// field. It's the bottom 5 for rv32, but the 5th bit is always
+		// defined as 0 there.
+		let shift: u32 = ((imm as u64) & gen_mask!(5, 0, u64)) as u32;
+
 		match self.func3 {
 			FUNC3_ADDI => {
 				if self.imm == 0 && self.rs1 == 0 && self.rd == 0 {
@@ -470,6 +475,26 @@ impl Insn
 				} else {
 					hart.write_register(self.rd as usize, 0);
 				}
+			},
+
+			FUNC3_SLLI => {
+				self.name = String::from("slli");
+				src = src.wrapping_shl(shift);
+				hart.write_register(self.rd as usize, src);
+			},
+
+			FUNC3_SRLI => {
+				// if bit 10 is set, shift the sign bit down
+				let is_srai = (imm as u64) & gen_mask!(10, 10, u64);
+				if is_srai != 0 {
+					self.name = String::from("srli");
+					src = src.wrapping_shr(shift);
+				} else {
+					self.name = String::from("srai");
+					src = (src as i64).wrapping_shr(shift) as u64;
+				}
+
+				hart.write_register(self.rd as usize, src);
 			},
 
 			_ => todo!("reg imm: {:}", self.func3),
