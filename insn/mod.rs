@@ -6,6 +6,7 @@ use crate::bus::Bus;
 use crate::field_get;
 use crate::gen_mask;
 use crate::platform::Platform;
+use crate::sign_extend;
 use debug_print::debug_println;
 
 use std::sync::Arc;
@@ -304,6 +305,8 @@ impl Insn
 			InsnType::U => {
 				self.imm = (input & IMM_UTYPE_MASK) as i32;
 				self.rd = field_get!(input, RD, u32);
+
+				self.imm = sign_extend!(self.imm, 31, i32);
 			},
 
 			InsnType::I => {
@@ -311,6 +314,8 @@ impl Insn
 				self.rd = field_get!(input, RD, u32);
 				self.rs1 = field_get!(input, RS1, u32);
 				self.func3 = field_get!(input, FUNC3, u32);
+
+				self.imm = sign_extend!(self.imm, 11, i32);
 			},
 
 			InsnType::R => {
@@ -326,11 +331,11 @@ impl Insn
 				self.rs2 = field_get!(input, RS2, u32);
 				self.func3 = field_get!(input, FUNC3, u32);
 
-				let lower_imm = field_get!(input, IMM4_0_STYPE, u32);
-				let upper_imm = field_get!(input, IMM11_5_STYPE, u32);
+				let imm4_0 = field_get!(input, IMM4_0_STYPE, u32);
+				let imm11_5 = field_get!(input, IMM11_5_STYPE, u32);
 
-				self.imm =
-					((upper_imm << IMM4_0_STYPE_WIDTH) | lower_imm) as i32;
+				self.imm = ((imm11_5 << IMM4_0_STYPE_WIDTH) | imm4_0) as i32;
+				self.imm = sign_extend!(self.imm, 11, i32);
 			},
 
 			InsnType::B => {
@@ -347,6 +352,7 @@ impl Insn
 				self.imm |= (imm_10_5 << 5) as i32;
 				self.imm |= (imm_11 << 11) as i32;
 				self.imm |= (imm_12 << 12) as i32;
+				self.imm = sign_extend!(self.imm, 12, i32);
 			},
 
 			InsnType::J => {
@@ -361,6 +367,7 @@ impl Insn
 				self.imm |= (imm_11 << 11) as i32;
 				self.imm |= (imm_19_12 << 12) as i32;
 				self.imm |= (imm_20 << 20) as i32;
+				self.imm = sign_extend!(self.imm, 20, i32);
 			},
 
 			_ => (),
@@ -423,8 +430,7 @@ impl Insn
 		// Arithmetic overflow is ignored and the result is simply the
 		// low XLEN bits of the result.
 		let mut src: u64 = hart.read_register(self.rs1 as usize);
-		let mut imm: i64 = self.imm.try_into().unwrap();
-		imm = imm.wrapping_shl(52).wrapping_shr(52);
+		let imm: i64 = self.imm as i64;
 
 		// shifts encode the "shamt" in the bottom 6 bits of the imm
 		// field. It's the bottom 5 for rv32, but the 5th bit is always
@@ -517,8 +523,7 @@ impl Insn
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 		let mut src: u64 = hart.read_register(self.rs1 as usize);
-		let mut imm: i64 = self.imm.try_into().unwrap();
-		imm = imm.wrapping_shl(52).wrapping_shr(52);
+		let imm: i64 = self.imm as i64;
 
 		// shifts encode the "shamt" in the bottom 6 bits of the imm
 		// field. It's the bottom 5 for rv32, but the 5th bit is always
@@ -540,7 +545,7 @@ impl Insn
 				// 32-bit of the result sign extended to 64-bits
 				src = src.wrapping_add_signed(imm);
 				src &= gen_mask!(31, 0, u64);
-				src = (src as i64).wrapping_shl(32).wrapping_shr(32) as u64;
+				src = src as i32 as i64 as u64;
 				hart.write_register(self.rd as usize, src);
 			},
 
@@ -726,6 +731,7 @@ impl Insn
 		// field to store a csr number. Those that use immediates
 		// specifically use unsigned ones & those appear in the
 		// rs1 field of a regular I-type.
+		let imm: usize = (self.imm as usize) & gen_mask!(11, 0, usize);
 		match self.func3 {
 			FUNC3_CSRRW => {
 				// Quoting the spec:
@@ -740,7 +746,7 @@ impl Insn
 				self.name = String::from("csrww");
 				let to_write: u64 = hart.read_register(self.rs1 as usize);
 				if self.rd != 0 {
-					let csr_old: u64 = hart.read_csr(self.imm as usize);
+					let csr_old: u64 = hart.read_csr(imm);
 					hart.write_register(self.rd as usize, csr_old);
 				}
 				hart.write_csr(self.rd as usize, to_write);
@@ -753,7 +759,7 @@ impl Insn
 				self.name = String::from("csrrwi");
 				let to_write: u64 = self.rs1 as u64;
 				if self.rd != 0 {
-					let csr_old: u64 = hart.read_csr(self.imm as usize);
+					let csr_old: u64 = hart.read_csr(imm);
 					hart.write_register(self.rd as usize, csr_old);
 				}
 				hart.write_csr(self.rd as usize, to_write);
@@ -770,10 +776,10 @@ impl Insn
 				// cause the corresponding bit to be set in the
 				// CSR, if that CSR bit is writeable.
 				self.name = String::from("csrws");
-				let csr_val: u64 = hart.read_csr(self.imm as usize);
+				let csr_val: u64 = hart.read_csr(imm);
 				if self.rs1 != 0 {
 					let mask = hart.read_register(self.rs1 as usize);
-					hart.write_csr(self.imm as usize, csr_val | mask);
+					hart.write_csr(imm, csr_val | mask);
 				}
 				hart.write_register(self.rd as usize, csr_val);
 			},
@@ -784,9 +790,9 @@ impl Insn
 				// limiting it to the lower 5 bits.
 				self.name = String::from("csrrsi");
 				let mask: u64 = self.rs1 as u64;
-				let csr_val: u64 = hart.read_csr(self.imm as usize);
+				let csr_val: u64 = hart.read_csr(imm);
 				if mask != 0 {
-					hart.write_csr(self.imm as usize, csr_val | mask);
+					hart.write_csr(imm, csr_val | mask);
 				}
 				hart.write_register(self.rd as usize, csr_val);
 			},
@@ -804,9 +810,9 @@ impl Insn
 				// if that CSR bit is writeable.
 				// Other bits in the CSR are unaffected.
 				self.name = String::from("csrrc");
-				let csr_val: u64 = hart.read_csr(self.imm as usize);
+				let csr_val: u64 = hart.read_csr(imm);
 				let mask = !hart.read_register(self.rs1 as usize);
-				hart.write_csr(self.imm as usize, csr_val & mask);
+				hart.write_csr(imm, csr_val & mask);
 				hart.write_register(self.rd as usize, csr_val);
 			},
 
@@ -815,10 +821,10 @@ impl Insn
 				// rs1 instead of reading from a register,
 				// limiting it to the lower 5 bits.
 				self.name = String::from("csrrci");
-				let csr_val: u64 = hart.read_csr(self.imm as usize);
+				let csr_val: u64 = hart.read_csr(imm);
 				let mask: u64 = !(self.rs1 as u64);
 				if mask != u64::MAX {
-					hart.write_csr(self.imm as usize, csr_val & mask);
+					hart.write_csr(imm, csr_val & mask);
 				}
 				hart.write_register(self.rd as usize, csr_val);
 			},
@@ -836,8 +842,7 @@ impl Insn
 		match self.opcode {
 			OPCODE_JAL => {
 				self.name = String::from("jal");
-				let mut tmp: i64 = self.imm.try_into().unwrap();
-				tmp = tmp.wrapping_shl(44).wrapping_shr(44);
+				let tmp: i64 = self.imm as i64;
 				let target: u64 = hart.pc.wrapping_add_signed(tmp);
 
 				debug_println!(
@@ -853,8 +858,7 @@ impl Insn
 
 			OPCODE_JALR => {
 				self.name = String::from("jalr");
-				let mut tmp: i64 = self.imm.try_into().unwrap();
-				tmp = tmp.wrapping_shl(52).wrapping_shr(52);
+				let tmp: i64 = self.imm as i64;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let mut target: u64 = base.wrapping_add_signed(tmp);
 				target &= gen_mask!(63, 1, u64);
@@ -933,7 +937,7 @@ impl Insn
 		}
 
 		if offset != 0 {
-			offset = offset.wrapping_shl(52).wrapping_shr(52);
+			offset = sign_extend!(offset, 12, i32);
 			hart.pc = hart.pc.wrapping_add_signed(offset as i64);
 			debug_println!("Branching to {:x}", hart.pc);
 		} else {
@@ -1116,7 +1120,7 @@ impl Insn
 		// trivial, and a lock is taken for all memory access anyway
 		let address: u64 = platform_bus.hart.read_register(self.rs1 as usize);
 		let mut val: u32 = platform_bus.read(address as usize).unwrap();
-		let rd: u64 = (val as u64).wrapping_shl(32).wrapping_shr(32);
+		let rd: u64 = val as i32 as i64 as u64;
 		platform_bus.hart.write_register(self.rd as usize, rd);
 		// check this to make sure the mask is okay to do
 		let other_val: u32 =
