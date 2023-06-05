@@ -373,6 +373,9 @@ impl Insn
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
+		let rs1: u64 = hart.read_register(self.rs1 as usize);
+		let rs2: u64 = hart.read_register(self.rs2 as usize);
+
 		match self.func3 {
 			FUNC3_ADD => {
 				if self.func7 == FUNC7_ADD {
@@ -381,10 +384,7 @@ impl Insn
 					// the result in rd
 					// overflows are ignored, the lower XLEN bits
 					// get written
-					let rs1: u64 = hart.read_register(self.rs1 as usize);
-					let rs2: u64 = hart.read_register(self.rs2 as usize);
 					let tmp: u64 = rs1.wrapping_add(rs2);
-
 					hart.write_register(self.rd as usize, tmp);
 				} else {
 					self.name = String::from("sub");
@@ -392,10 +392,7 @@ impl Insn
 					// and stores the result in rd
 					// overflows are ignored, the lower XLEN bits
 					// get written
-					let rs1: u64 = hart.read_register(self.rs1 as usize);
-					let rs2: u64 = hart.read_register(self.rs2 as usize);
 					let tmp: u64 = rs1.wrapping_sub(rs2);
-
 					hart.write_register(self.rd as usize, tmp);
 				}
 			},
