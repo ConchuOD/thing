@@ -291,6 +291,10 @@ impl Insn
 				}
 			},
 
+			OPCODE_INT_REG_REG_32 => {
+				todo!("reg reg 32 .insn 0x{:x}", input);
+			},
+
 			_ => {
 				todo!("opcode 0b{:b} .insn 0x{:x}", self.opcode, input);
 			},
