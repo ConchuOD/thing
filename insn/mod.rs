@@ -403,6 +403,19 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
+	fn handle_int_reg_reg32_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		let hart = &mut (platform.write().unwrap()).hart;
+
+		let rs1: u64 = hart.read_register(self.rs1 as usize);
+		let rs2: u64 = hart.read_register(self.rs2 as usize);
+
+		// shifts encode the "shamt" in the bottom 6 bits of the imm
+		// field. It's the bottom 5 for rv32, but the 5th bit is always
+		// defined as 0 there.
+		let shift: u32 = (rs2 & gen_mask!(5, 0, u64)) as u32;
+	}
+
 	fn handle_int_reg_imm_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
@@ -505,6 +518,14 @@ impl Insn
 	)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
+		let mut src: u64 = hart.read_register(self.rs1 as usize);
+		let mut imm: i64 = self.imm.try_into().unwrap();
+		imm = imm.wrapping_shl(52).wrapping_shr(52);
+
+		// shifts encode the "shamt" in the bottom 6 bits of the imm
+		// field. It's the bottom 5 for rv32, but the 5th bit is always
+		// defined as 0 there.
+		let shift: u32 = ((imm as u64) & gen_mask!(5, 0, u64)) as u32;
 
 		match self.func3 {
 			FUNC3_ADDIW => {
@@ -519,15 +540,40 @@ impl Insn
 				// of a 32-bit result in rd. Arithmetic overflow
 				// is ignored and the result is simply the low
 				// 32-bit of the result sign extended to 64-bits
-				let mut tmp: u64 = hart.read_register(self.rs1 as usize);
-				let mut imm: i64 = self.imm.try_into().unwrap();
-				imm = imm.wrapping_shl(52).wrapping_shr(52);
-				tmp = tmp.wrapping_add_signed(imm);
-				tmp &= gen_mask!(31, 0, u64);
-				tmp = (tmp as i64).wrapping_shl(32).wrapping_shr(32) as u64;
-				hart.write_register(self.rd as usize, tmp);
+				src = src.wrapping_add_signed(imm);
+				src &= gen_mask!(31, 0, u64);
+				src = (src as i64).wrapping_shl(32).wrapping_shr(32) as u64;
+				hart.write_register(self.rd as usize, src);
 			},
 
+			FUNC3_SLLIW => {
+				// like slli, but with 32-bit values/results
+				// TODO: verify that "32-bit signed result"
+				// does not mean that it should be sign extended
+				// out to 64-bits
+				self.name = String::from("slliw");
+				let tmp_src = (src & gen_mask!(31, 0, u64)) as u32;
+				src = tmp_src.wrapping_shl(shift) as u64;
+				hart.write_register(self.rd as usize, src);
+			},
+
+			FUNC3_SRLIW => {
+				let is_sraiw = (imm as u64) & gen_mask!(10, 10, u64);
+				// like srli, but with 32-bit values/results
+				// TODO: verify that "32-bit signed result"
+				// does not mean that it should be sign extended
+				// out to 64-bits
+				let tmp_src = (src & gen_mask!(31, 0, u64)) as u32;
+				if is_sraiw == 0 {
+					self.name = String::from("srliw");
+					src = tmp_src.wrapping_shr(shift) as u64;
+				} else {
+					self.name = String::from("sraiw");
+					src = (tmp_src as i32).wrapping_shr(shift) as u32 as u64;
+				}
+
+				hart.write_register(self.rd as usize, src);
+			},
 			_ => todo!("reg imm32: {:}", self.func3),
 		}
 
