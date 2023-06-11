@@ -1032,10 +1032,11 @@ impl Insn
 
 		if offset != 0 {
 			offset = sign_extend!(offset, 12, i32);
-			hart.pc = hart.pc.wrapping_add_signed(offset as i64);
-			debug_println!("Branching to {:x}", hart.pc);
+			let target: u64 = hart.pc.wrapping_add_signed(offset as i64);
+			debug_println!("Branching to {:x} from {:x}", target, hart.pc);
+			hart.pc = target;
 		} else {
-			debug_println!("Branch not taken @ {:?} {:b}", hart.pc, self.func3);
+			debug_println!("Branch not taken @ {:x}", hart.pc);
 			hart.pc += 4;
 		}
 	}
