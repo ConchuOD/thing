@@ -6,6 +6,7 @@ use crate::bus::Bus;
 use crate::field_get;
 use crate::gen_mask;
 use crate::platform::Platform;
+use crate::sign_extend;
 use debug_print::debug_println;
 
 use std::sync::Arc;
@@ -45,25 +46,21 @@ macro_rules! insn_mask {
 	}};
 }
 
-const OPCODE_MASK: u32 = 0b0111_1111;
-const OPCODE_LUI: u32 = 0b0011_0111;
-const OPCODE_AUIPC: u32 = 0b0001_0111;
-const OPCODE_JAL: u32 = 0b0110_1111;
-const OPCODE_JALR: u32 = 0b0110_0111;
-
-const OPCODE_STORE: u32 = 0b010_0011;
 const OPCODE_LOAD: u32 = 0b000_0011;
-
-const OPCODE_SYSTEM: u32 = 0b111_0011;
-
 const OPCODE_MISCMEM: u32 = 0b000_1111;
-
-const OPCODE_BRANCH: u32 = 0b110_0011;
-
-const OPCODE_INT_REG_IMM32: u32 = 0b001_1011;
-
 const OPCODE_INT_REG_IMM: u32 = 0b0001_0011;
-const OPCODE_INT_REG_REG: u32 = 0b0011_0011;
+const OPCODE_AUIPC: u32 = 0b001_0111;
+const OPCODE_INT_REG_IMM_32: u32 = 0b001_1011;
+const OPCODE_STORE: u32 = 0b010_0011;
+const OPCODE_ATOMIC: u32 = 0b010_1111;
+const OPCODE_INT_REG_REG: u32 = 0b011_0011;
+const OPCODE_LUI: u32 = 0b011_0111;
+const OPCODE_INT_REG_REG_32: u32 = 0b011_1011;
+const OPCODE_BRANCH: u32 = 0b110_0011;
+const OPCODE_JALR: u32 = 0b110_0111;
+const OPCODE_JAL: u32 = 0b110_1111;
+const OPCODE_SYSTEM: u32 = 0b111_0011;
+const OPCODE_MASK: u32 = 0b111_1111;
 
 const RD_SHIFT: u32 = 7;
 const RD_WIDTH: u32 = 5;
@@ -184,6 +181,9 @@ const FUNC3_BGE: u32 = 0b101;
 const FUNC3_BLTU: u32 = 0b110;
 const FUNC3_BGEU: u32 = 0b111;
 
+const FUNC3_RV32_ATOMIC: u32 = 0b010;
+const FUNC3_RV64_ATOMIC: u32 = 0b011;
+
 const FUNC7_SHIFT: u32 = IMM11_5_STYPE_SHIFT;
 const FUNC7_WIDTH: u32 = IMM11_5_STYPE_WIDTH;
 const FUNC7_MASK: u32 = IMM11_5_STYPE_MASK;
@@ -201,6 +201,18 @@ const FUNC7_SRL: u32 = 0b0000000;
 const FUNC7_SRA: u32 = 0b0100000;
 const FUNC7_OR: u32 = 0b0000000;
 const FUNC7_AND: u32 = 0b0000000;
+
+const FUNC7_LR: u32 = 0b0001000;
+const FUNC7_SC: u32 = 0b0001100;
+const FUNC7_AMOSWAP: u32 = 0b0000100;
+const FUNC7_AMOADD: u32 = 0b0000000;
+const FUNC7_AMOXOR: u32 = 0b0010000;
+const FUNC7_AMOAND: u32 = 0b0110000;
+const FUNC7_AMOOR: u32 = 0b0100000;
+const FUNC7_AMOMIN: u32 = 0b1000000;
+const FUNC7_AMOMAX: u32 = 0b1010000;
+const FUNC7_AMOMINU: u32 = 0b1100000;
+const FUNC7_AMOMAXU: u32 = 0b1110000;
 
 impl Default for Insn
 {
@@ -267,13 +279,21 @@ impl Insn
 				self.insn_type = InsnType::B;
 			},
 
-			OPCODE_INT_REG_IMM32 => {
+			OPCODE_ATOMIC => {
+				self.insn_type = InsnType::R;
+			},
+
+			OPCODE_INT_REG_IMM_32 => {
 				let func3 = field_get!(input, FUNC3, u32);
 				if func3 == 0 {
 					self.insn_type = InsnType::I;
 				} else {
 					self.insn_type = InsnType::R;
 				}
+			},
+
+			OPCODE_INT_REG_REG_32 => {
+				self.insn_type = InsnType::R;
 			},
 
 			_ => {
@@ -285,6 +305,8 @@ impl Insn
 			InsnType::U => {
 				self.imm = (input & IMM_UTYPE_MASK) as i32;
 				self.rd = field_get!(input, RD, u32);
+
+				self.imm = sign_extend!(self.imm, 31, i32);
 			},
 
 			InsnType::I => {
@@ -292,6 +314,8 @@ impl Insn
 				self.rd = field_get!(input, RD, u32);
 				self.rs1 = field_get!(input, RS1, u32);
 				self.func3 = field_get!(input, FUNC3, u32);
+
+				self.imm = sign_extend!(self.imm, 11, i32);
 			},
 
 			InsnType::R => {
@@ -307,11 +331,11 @@ impl Insn
 				self.rs2 = field_get!(input, RS2, u32);
 				self.func3 = field_get!(input, FUNC3, u32);
 
-				let lower_imm = field_get!(input, IMM4_0_STYPE, u32);
-				let upper_imm = field_get!(input, IMM11_5_STYPE, u32);
+				let imm4_0 = field_get!(input, IMM4_0_STYPE, u32);
+				let imm11_5 = field_get!(input, IMM11_5_STYPE, u32);
 
-				self.imm =
-					((upper_imm << IMM4_0_STYPE_WIDTH) | lower_imm) as i32;
+				self.imm = ((imm11_5 << IMM4_0_STYPE_WIDTH) | imm4_0) as i32;
+				self.imm = sign_extend!(self.imm, 11, i32);
 			},
 
 			InsnType::B => {
@@ -328,6 +352,7 @@ impl Insn
 				self.imm |= (imm_10_5 << 5) as i32;
 				self.imm |= (imm_11 << 11) as i32;
 				self.imm |= (imm_12 << 12) as i32;
+				self.imm = sign_extend!(self.imm, 12, i32);
 			},
 
 			InsnType::J => {
@@ -342,6 +367,7 @@ impl Insn
 				self.imm |= (imm_11 << 11) as i32;
 				self.imm |= (imm_19_12 << 12) as i32;
 				self.imm |= (imm_20 << 20) as i32;
+				self.imm = sign_extend!(self.imm, 20, i32);
 			},
 
 			_ => (),
@@ -352,34 +378,138 @@ impl Insn
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
+		let rs1: u64 = hart.read_register(self.rs1 as usize);
+		let rs2: u64 = hart.read_register(self.rs2 as usize);
+
+		// shifts encode the "shamt" in the bottom 6 bits of register
+		// rs2. It's the bottom 5 for rv32.
+		let shift: u32 = (rs2 & gen_mask!(5, 0, u64)) as u32;
+
 		match self.func3 {
 			FUNC3_ADD => {
 				if self.func7 == FUNC7_ADD {
 					self.name = String::from("add");
-					// ADD adds the value in rs1 to rs2 and stores
-					// the result in rd
-					// overflows are ignored, the lower XLEN bits
-					// get written
-					let rs1: u64 = hart.read_register(self.rs1 as usize);
-					let rs2: u64 = hart.read_register(self.rs2 as usize);
+					// ADD adds the value in rs1 to rs2 and
+					// stores the result in rd
+					// overflows are ignored, the lower XLEN
+					// bits get written
 					let tmp: u64 = rs1.wrapping_add(rs2);
-
 					hart.write_register(self.rd as usize, tmp);
 				} else {
 					self.name = String::from("sub");
-					// SUB subtracts the value in rs2 from rs1
-					// and stores the result in rd
-					// overflows are ignored, the lower XLEN bits
-					// get written
-					let rs1: u64 = hart.read_register(self.rs1 as usize);
-					let rs2: u64 = hart.read_register(self.rs2 as usize);
+					// SUB subtracts the value in rs2 from
+					// rs1 and stores the result in rd
+					// overflows are ignored, the lower XLEN
+					// bits get written
 					let tmp: u64 = rs1.wrapping_sub(rs2);
-
 					hart.write_register(self.rd as usize, tmp);
 				}
 			},
 
+			FUNC3_AND => {
+				self.name = String::from("and");
+				let tmp: u64 = rs1 & rs2;
+				hart.write_register(self.rd as usize, tmp);
+			},
+
+			FUNC3_OR => {
+				self.name = String::from("or");
+				let tmp: u64 = rs1 | rs2;
+				hart.write_register(self.rd as usize, tmp);
+			},
+
+			FUNC3_XOR => {
+				self.name = String::from("xor");
+				let tmp: u64 = rs1 ^ rs2;
+				hart.write_register(self.rd as usize, tmp);
+			},
+
+			FUNC3_SLT => {
+				self.name = String::from("slt");
+
+				if (rs1 as i64) < (rs2 as i64) {
+					hart.write_register(self.rd as usize, 1);
+				} else {
+					hart.write_register(self.rd as usize, 0);
+				}
+			},
+
+			FUNC3_SLTU => {
+				if self.rs1 == 0 {
+					self.name = String::from("snez");
+				} else {
+					self.name = String::from("sltu");
+				}
+
+				if rs1 < rs2 {
+					hart.write_register(self.rd as usize, 1);
+				} else {
+					hart.write_register(self.rd as usize, 0);
+				}
+			},
+
+			FUNC3_SLL => {
+				self.name = String::from("sll");
+				let tmp = rs1.wrapping_shl(shift);
+				hart.write_register(self.rd as usize, tmp);
+			},
+
+			FUNC3_SRL => {
+				// if bit 6 is set, shift the sign bit down
+				let is_sra = (self.func7 & gen_mask!(6, 6, u32)) == FUNC7_SRA;
+				let tmp: u64;
+				if !is_sra {
+					self.name = String::from("srl");
+					tmp = rs1.wrapping_shr(shift);
+				} else {
+					self.name = String::from("sra");
+					tmp = (rs1 as i64).wrapping_shr(shift) as u64;
+				}
+
+				hart.write_register(self.rd as usize, tmp);
+			},
+
 			_ => todo!("reg reg: {:}", self.func3),
+		}
+
+		debug_println!("Found {:}", self.name);
+	}
+
+	fn handle_int_reg_reg32_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		let hart = &mut (platform.write().unwrap()).hart;
+
+		let rs1: u64 = hart.read_register(self.rs1 as usize);
+		let rs1: i32 = (rs1 & gen_mask!(31, 0, u64)) as i32;
+		let rs2: u64 = hart.read_register(self.rs2 as usize);
+		let rs2: i32 = (rs2 & gen_mask!(31, 0, u64)) as i32;
+
+		// shifts encode the "shamt" in the bottom 6 bits of rs2
+		// field. It's the bottom 5 for rv32.
+		let shift: u32 = (rs2 as u32) & gen_mask!(5, 0, u32);
+
+		match self.func3 {
+			FUNC3_ADD => {
+				if self.func7 == FUNC7_ADD {
+					self.name = String::from("addw");
+					// ADDW is like ADD, but operates on
+					// 32-bit values, producing signed
+					// 32-bit results. The results are sign
+					// extended to 64-bit values and written
+					// to rd
+					let tmp: i32 = rs1.wrapping_add(rs2);
+					let extended: u64 = tmp as i64 as u64;
+					hart.write_register(self.rd as usize, extended);
+				} else {
+					self.name = String::from("subw");
+					// SUBW is to SUB as ADDW is to ADD
+					let tmp: i32 = rs1.wrapping_sub(rs2);
+					let extended: u64 = tmp as i64 as u64;
+					hart.write_register(self.rd as usize, extended);
+				}
+			},
+
+			_ => todo!("reg reg 32: {:}", self.func3),
 		}
 
 		debug_println!("Found {:}", self.name);
@@ -393,9 +523,13 @@ impl Insn
 		// immediate, and use it perform some calculation register rs1.
 		// Arithmetic overflow is ignored and the result is simply the
 		// low XLEN bits of the result.
-		let mut tmp: u64 = hart.read_register(self.rs1 as usize);
-		let mut imm: i64 = self.imm.try_into().unwrap();
-		imm = imm.wrapping_shl(52).wrapping_shr(52);
+		let mut src: u64 = hart.read_register(self.rs1 as usize);
+		let imm: i64 = self.imm as i64;
+
+		// shifts encode the "shamt" in the bottom 6 bits of the imm
+		// field. It's the bottom 5 for rv32, but the 5th bit is always
+		// defined as 0 there.
+		let shift: u32 = ((imm as u64) & gen_mask!(5, 0, u64)) as u32;
 
 		match self.func3 {
 			FUNC3_ADDI => {
@@ -408,26 +542,67 @@ impl Insn
 					self.name = String::from("addi");
 				}
 
-				tmp = tmp.wrapping_add_signed(imm);
-				hart.write_register(self.rd as usize, tmp);
+				src = src.wrapping_add_signed(imm);
+				hart.write_register(self.rd as usize, src);
 			},
 
 			FUNC3_ANDI => {
 				self.name = String::from("andi");
-				tmp &= imm as u64;
-				hart.write_register(self.rd as usize, tmp);
+				src &= imm as u64;
+				hart.write_register(self.rd as usize, src);
 			},
 
 			FUNC3_ORI => {
 				self.name = String::from("ori");
-				tmp |= imm as u64;
-				hart.write_register(self.rd as usize, tmp);
+				src |= imm as u64;
+				hart.write_register(self.rd as usize, src);
 			},
 
 			FUNC3_XORI => {
 				self.name = String::from("xori");
-				tmp ^= imm as u64;
-				hart.write_register(self.rd as usize, tmp);
+				src ^= imm as u64;
+				hart.write_register(self.rd as usize, src);
+			},
+
+			FUNC3_SLTI => {
+				self.name = String::from("slti");
+				let tmp: i64 = src as i64;
+
+				if tmp < imm {
+					hart.write_register(self.rd as usize, 1);
+				} else {
+					hart.write_register(self.rd as usize, 0);
+				}
+			},
+
+			FUNC3_SLTIU => {
+				self.name = String::from("sltiu");
+
+				if src < (imm as u64) {
+					hart.write_register(self.rd as usize, 1);
+				} else {
+					hart.write_register(self.rd as usize, 0);
+				}
+			},
+
+			FUNC3_SLLI => {
+				self.name = String::from("slli");
+				src = src.wrapping_shl(shift);
+				hart.write_register(self.rd as usize, src);
+			},
+
+			FUNC3_SRLI => {
+				// if bit 10 is set, shift the sign bit down
+				let is_srai = (imm as u64) & gen_mask!(10, 10, u64);
+				if is_srai != 0 {
+					self.name = String::from("srli");
+					src = src.wrapping_shr(shift);
+				} else {
+					self.name = String::from("srai");
+					src = (src as i64).wrapping_shr(shift) as u64;
+				}
+
+				hart.write_register(self.rd as usize, src);
 			},
 
 			_ => todo!("reg imm: {:}", self.func3),
@@ -441,6 +616,13 @@ impl Insn
 	)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
+		let mut src: u64 = hart.read_register(self.rs1 as usize);
+		let imm: i64 = self.imm as i64;
+
+		// shifts encode the "shamt" in the bottom 6 bits of the imm
+		// field. It's the bottom 5 for rv32, but the 5th bit is always
+		// defined as 0 there.
+		let shift: u32 = ((imm as u64) & gen_mask!(5, 0, u64)) as u32;
 
 		match self.func3 {
 			FUNC3_ADDIW => {
@@ -455,15 +637,40 @@ impl Insn
 				// of a 32-bit result in rd. Arithmetic overflow
 				// is ignored and the result is simply the low
 				// 32-bit of the result sign extended to 64-bits
-				let mut tmp: u64 = hart.read_register(self.rs1 as usize);
-				let mut imm: i64 = self.imm.try_into().unwrap();
-				imm = imm.wrapping_shl(52).wrapping_shr(52);
-				tmp = tmp.wrapping_add_signed(imm);
-				tmp &= gen_mask!(31, 0, u64);
-				tmp = (tmp as i64).wrapping_shl(32).wrapping_shr(32) as u64;
-				hart.write_register(self.rd as usize, tmp);
+				src = src.wrapping_add_signed(imm);
+				src &= gen_mask!(31, 0, u64);
+				src = src as i32 as i64 as u64;
+				hart.write_register(self.rd as usize, src);
 			},
 
+			FUNC3_SLLIW => {
+				// like slli, but with 32-bit values/results
+				// TODO: verify that "32-bit signed result"
+				// does not mean that it should be sign extended
+				// out to 64-bits
+				self.name = String::from("slliw");
+				let tmp_src = (src & gen_mask!(31, 0, u64)) as u32;
+				src = tmp_src.wrapping_shl(shift) as u64;
+				hart.write_register(self.rd as usize, src);
+			},
+
+			FUNC3_SRLIW => {
+				let is_sraiw = (imm as u64) & gen_mask!(10, 10, u64);
+				// like srli, but with 32-bit values/results
+				// TODO: verify that "32-bit signed result"
+				// does not mean that it should be sign extended
+				// out to 64-bits
+				let tmp_src = (src & gen_mask!(31, 0, u64)) as u32;
+				if is_sraiw == 0 {
+					self.name = String::from("srliw");
+					src = tmp_src.wrapping_shr(shift) as u64;
+				} else {
+					self.name = String::from("sraiw");
+					src = (tmp_src as i32).wrapping_shr(shift) as u32 as u64;
+				}
+
+				hart.write_register(self.rd as usize, src);
+			},
 			_ => todo!("reg imm32: {:}", self.func3),
 		}
 
@@ -486,29 +693,46 @@ impl Insn
 		let mut tmp: u64 = hart.read_register(self.rs2 as usize);
 		drop(platform_read);
 		let platform_write = &mut platform.write().unwrap();
+		let hart_id = platform_write.hart.id;
 
 		match self.func3 {
 			FUNC3_SD => {
 				self.name = String::from("sd");
-				let _ = platform_write.write(address as usize, tmp);
+				let _ = platform_write.write_from_hart(
+					hart_id,
+					address as usize,
+					tmp,
+				);
 			},
 
 			FUNC3_SW => {
 				self.name = String::from("sw");
 				tmp &= gen_mask!(31, 0, u64);
-				let _ = platform_write.write(address as usize, tmp as u32);
+				let _ = platform_write.write_from_hart(
+					hart_id,
+					address as usize,
+					tmp as u32,
+				);
 			},
 
 			FUNC3_SH => {
 				self.name = String::from("sh");
 				tmp &= gen_mask!(15, 0, u64);
-				let _ = platform_write.write(address as usize, tmp as u16);
+				let _ = platform_write.write_from_hart(
+					hart_id,
+					address as usize,
+					tmp as u16,
+				);
 			},
 
 			FUNC3_SB => {
 				self.name = String::from("sb");
 				tmp &= gen_mask!(7, 0, u64);
-				let _ = platform_write.write(address as usize, tmp as u8);
+				let _ = platform_write.write_from_hart(
+					hart_id,
+					address as usize,
+					tmp as u8,
+				);
 			},
 
 			_ => todo!("store: {:}", self.func3),
@@ -601,6 +825,7 @@ impl Insn
 		// field to store a csr number. Those that use immediates
 		// specifically use unsigned ones & those appear in the
 		// rs1 field of a regular I-type.
+		let imm: usize = (self.imm as usize) & gen_mask!(11, 0, usize);
 		match self.func3 {
 			FUNC3_CSRRW => {
 				// Quoting the spec:
@@ -615,7 +840,7 @@ impl Insn
 				self.name = String::from("csrww");
 				let to_write: u64 = hart.read_register(self.rs1 as usize);
 				if self.rd != 0 {
-					let csr_old: u64 = hart.read_csr(self.imm as usize);
+					let csr_old: u64 = hart.read_csr(imm);
 					hart.write_register(self.rd as usize, csr_old);
 				}
 				hart.write_csr(self.rd as usize, to_write);
@@ -628,7 +853,7 @@ impl Insn
 				self.name = String::from("csrrwi");
 				let to_write: u64 = self.rs1 as u64;
 				if self.rd != 0 {
-					let csr_old: u64 = hart.read_csr(self.imm as usize);
+					let csr_old: u64 = hart.read_csr(imm);
 					hart.write_register(self.rd as usize, csr_old);
 				}
 				hart.write_csr(self.rd as usize, to_write);
@@ -645,10 +870,10 @@ impl Insn
 				// cause the corresponding bit to be set in the
 				// CSR, if that CSR bit is writeable.
 				self.name = String::from("csrws");
-				let csr_val: u64 = hart.read_csr(self.imm as usize);
+				let csr_val: u64 = hart.read_csr(imm);
 				if self.rs1 != 0 {
 					let mask = hart.read_register(self.rs1 as usize);
-					hart.write_csr(self.imm as usize, csr_val | mask);
+					hart.write_csr(imm, csr_val | mask);
 				}
 				hart.write_register(self.rd as usize, csr_val);
 			},
@@ -659,9 +884,9 @@ impl Insn
 				// limiting it to the lower 5 bits.
 				self.name = String::from("csrrsi");
 				let mask: u64 = self.rs1 as u64;
-				let csr_val: u64 = hart.read_csr(self.imm as usize);
+				let csr_val: u64 = hart.read_csr(imm);
 				if mask != 0 {
-					hart.write_csr(self.imm as usize, csr_val | mask);
+					hart.write_csr(imm, csr_val | mask);
 				}
 				hart.write_register(self.rd as usize, csr_val);
 			},
@@ -679,9 +904,9 @@ impl Insn
 				// if that CSR bit is writeable.
 				// Other bits in the CSR are unaffected.
 				self.name = String::from("csrrc");
-				let csr_val: u64 = hart.read_csr(self.imm as usize);
+				let csr_val: u64 = hart.read_csr(imm);
 				let mask = !hart.read_register(self.rs1 as usize);
-				hart.write_csr(self.imm as usize, csr_val & mask);
+				hart.write_csr(imm, csr_val & mask);
 				hart.write_register(self.rd as usize, csr_val);
 			},
 
@@ -690,10 +915,10 @@ impl Insn
 				// rs1 instead of reading from a register,
 				// limiting it to the lower 5 bits.
 				self.name = String::from("csrrci");
-				let csr_val: u64 = hart.read_csr(self.imm as usize);
+				let csr_val: u64 = hart.read_csr(imm);
 				let mask: u64 = !(self.rs1 as u64);
 				if mask != u64::MAX {
-					hart.write_csr(self.imm as usize, csr_val & mask);
+					hart.write_csr(imm, csr_val & mask);
 				}
 				hart.write_register(self.rd as usize, csr_val);
 			},
@@ -711,8 +936,7 @@ impl Insn
 		match self.opcode {
 			OPCODE_JAL => {
 				self.name = String::from("jal");
-				let mut tmp: i64 = self.imm.try_into().unwrap();
-				tmp = tmp.wrapping_shl(44).wrapping_shr(44);
+				let tmp: i64 = self.imm as i64;
 				let target: u64 = hart.pc.wrapping_add_signed(tmp);
 
 				debug_println!(
@@ -728,8 +952,7 @@ impl Insn
 
 			OPCODE_JALR => {
 				self.name = String::from("jalr");
-				let mut tmp: i64 = self.imm.try_into().unwrap();
-				tmp = tmp.wrapping_shl(52).wrapping_shr(52);
+				let tmp: i64 = self.imm as i64;
 				let base: u64 = hart.read_register(self.rs1 as usize);
 				let mut target: u64 = base.wrapping_add_signed(tmp);
 				target &= gen_mask!(63, 1, u64);
@@ -808,11 +1031,12 @@ impl Insn
 		}
 
 		if offset != 0 {
-			offset = offset.wrapping_shl(52).wrapping_shr(52);
-			hart.pc = hart.pc.wrapping_add_signed(offset as i64);
-			debug_println!("Branching to {:x}", hart.pc);
+			offset = sign_extend!(offset, 12, i32);
+			let target: u64 = hart.pc.wrapping_add_signed(offset as i64);
+			debug_println!("Branching to {:x} from {:x}", target, hart.pc);
+			hart.pc = target;
 		} else {
-			debug_println!("Branch not taken @ {:?} {:b}", hart.pc, self.func3);
+			debug_println!("Branch not taken @ {:x}", hart.pc);
 			hart.pc += 4;
 		}
 	}
@@ -848,6 +1072,189 @@ impl Insn
 
 			_ => todo!("upper imm"),
 		}
+	}
+
+	fn handle_atomic_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		let func5 = self.func7 & gen_mask!(6, 2, u32);
+		if func5 == FUNC7_LR {
+			self.handle_lr_insn(platform);
+		} else if func5 == FUNC7_SC {
+			self.handle_sc_insn(platform);
+		} else if self.func3 == FUNC3_RV32_ATOMIC {
+			self.handle_atomic_rv32_insn(platform);
+		} else {
+			self.handle_atomic_rv64_insn(platform);
+		}
+
+		debug_println!("Found {:}", self.name);
+	}
+
+	fn handle_sc_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		self.name = String::from("sc");
+		let platform_bus = &mut platform.write().unwrap();
+		let hart_id = platform_bus.hart.id;
+		let address: u64 = platform_bus.hart.read_register(self.rs1 as usize);
+		let val: u64 = platform_bus.hart.read_register(self.rs2 as usize);
+		let mut write_size = 4;
+
+		if self.func3 == 0b010 {
+			write_size = 2;
+		}
+
+		// If we do not have a reservation, then abort leaving a
+		// non-zero value in rd.
+		if !platform_bus.check_invalidate_reservation_set(
+			hart_id,
+			address as usize,
+			write_size,
+		) {
+			platform_bus.hart.write_register(self.rd as usize, 1);
+			return;
+		}
+
+		if self.func3 == 0b010 {
+			let val = (val & gen_mask!(31, 0, u64)) as u32;
+			let _ =
+				platform_bus.write_from_hart(hart_id, address as usize, val);
+		} else {
+			let _ =
+				platform_bus.write_from_hart(hart_id, address as usize, val);
+		}
+
+		platform_bus.hart.write_register(self.rd as usize, 0);
+	}
+
+	fn handle_lr_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		self.name = String::from("lr");
+		let platform_bus = &mut platform.write().unwrap();
+		let hart_id = platform_bus.hart.id;
+		let address: u64 = platform_bus.hart.read_register(self.rs1 as usize);
+		let mut read_size = 4;
+		let val: u64;
+
+		if self.func3 == 0b010 {
+			read_size = 2;
+			let tmp: u32 = platform_bus.read(address as usize).unwrap();
+			val = tmp as i32 as i64 as u64;
+		} else {
+			val = platform_bus.read(address as usize).unwrap();
+		}
+
+		platform_bus.claim_reservation_set(
+			hart_id,
+			address as usize,
+			read_size,
+		);
+		platform_bus.hart.write_register(self.rd as usize, val);
+	}
+
+	fn handle_atomic_rv64_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		let platform_bus = &mut platform.write().unwrap();
+
+		// Quoting the spec:
+		// AMO instructions atomically load a data value from the
+		// address in rs1, place the value into register rd, apply a
+		// binary operator to the loaded value and the original value
+		// in rs2, then store the result back to the address in rs1
+		// I am just ignoring aq/rl here, because this system is super
+		// trivial, and a lock is taken for all memory access anyway
+		let address: u64 = platform_bus.hart.read_register(self.rs1 as usize);
+		let mut val: u64 = platform_bus.read(address as usize).unwrap();
+		platform_bus.hart.write_register(self.rd as usize, val);
+		let other_val: u64 = platform_bus.hart.read_register(self.rs2 as usize);
+
+		match self.func7 & gen_mask!(6, 2, u32) {
+			FUNC7_AMOADD => {
+				self.name = String::from("amoadd");
+				val += other_val;
+			},
+
+			FUNC7_AMOAND => {
+				self.name = String::from("amoand");
+				val &= other_val;
+			},
+
+			FUNC7_AMOOR => {
+				self.name = String::from("amoor");
+				val |= other_val;
+			},
+
+			FUNC7_AMOXOR => {
+				self.name = String::from("amoadd");
+				val ^= other_val;
+			},
+
+			FUNC7_AMOSWAP => {
+				self.name = String::from("amoswap");
+				val = other_val;
+			},
+
+			_ => todo!("atomic {:b}", (self.func7 & gen_mask!(6, 2, u32)) >> 2),
+		}
+
+		let hart_id = platform_bus.hart.id;
+		let _ = platform_bus.write_from_hart(hart_id, address as usize, val);
+
+		debug_println!("Found {:}", self.name);
+	}
+
+	fn handle_atomic_rv32_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	{
+		let platform_bus = &mut platform.write().unwrap();
+
+		// Quoting the spec:
+		// AMO instructions atomically load a data value from the
+		// address in rs1, place the value into register rd, apply a
+		// binary operator to the loaded value and the original value
+		// in rs2, then store the result back to the address in rs1
+		// I am just ignoring aq/rl here, because this system is super
+		// trivial, and a lock is taken for all memory access anyway
+		let address: u64 = platform_bus.hart.read_register(self.rs1 as usize);
+		let mut val: u32 = platform_bus.read(address as usize).unwrap();
+		let rd: u64 = val as i32 as i64 as u64;
+		platform_bus.hart.write_register(self.rd as usize, rd);
+		// check this to make sure the mask is okay to do
+		let other_val: u32 =
+			(platform_bus.hart.read_register(self.rs2 as usize)
+				& gen_mask!(31, 0, u64)) as u32;
+
+		match self.func7 & gen_mask!(6, 2, u32) {
+			FUNC7_AMOADD => {
+				self.name = String::from("amoadd");
+				val += other_val;
+			},
+
+			FUNC7_AMOAND => {
+				self.name = String::from("amoand");
+				val &= other_val;
+			},
+
+			FUNC7_AMOOR => {
+				self.name = String::from("amoor");
+				val |= other_val;
+			},
+
+			FUNC7_AMOXOR => {
+				self.name = String::from("amoadd");
+				val ^= other_val;
+			},
+
+			FUNC7_AMOSWAP => {
+				self.name = String::from("amoswap");
+				val = other_val;
+			},
+
+			_ => todo!("atomic {:b}", (self.func7 & gen_mask!(6, 2, u32)) >> 2),
+		}
+
+		let hart_id = platform_bus.hart.id;
+		let _ = platform_bus.write_from_hart(hart_id, address as usize, val);
+
+		debug_println!("Found {:}", self.name);
 	}
 
 	fn increment_pc(&self, platform: &Arc<RwLock<&mut Platform>>)
@@ -903,13 +1310,21 @@ impl Insn
 				self.handle_branch_insn(&arc);
 			},
 
-			OPCODE_INT_REG_IMM32 => {
+			OPCODE_INT_REG_IMM_32 => {
 				self.handle_int_reg_imm32_insn(&arc);
+			},
+
+			OPCODE_INT_REG_REG_32 => {
+				self.handle_int_reg_reg32_insn(&arc);
+			},
+
+			OPCODE_ATOMIC => {
+				self.handle_atomic_insn(&arc);
 			},
 
 			_ => {
 				debug_println!("unimplemented instruction {:x}", self.opcode);
-				dump_unimplemented_insn(self, arc);
+				dump_unimplemented_insn(self, &arc);
 				panic!();
 			},
 		}
@@ -920,7 +1335,7 @@ impl Insn
 	}
 }
 
-fn dump_unimplemented_insn(insn: &Insn, platform: Arc<RwLock<&mut Platform>>)
+fn dump_unimplemented_insn(insn: &Insn, platform: &Arc<RwLock<&mut Platform>>)
 {
 	let hart = &mut (platform.write().unwrap()).hart;
 	debug_println!(
