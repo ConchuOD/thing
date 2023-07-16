@@ -14,6 +14,7 @@ mod hart;
 mod insn;
 mod lebytes;
 mod platform;
+mod uart;
 
 /// thing
 #[derive(Parser, Debug)]
