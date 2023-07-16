@@ -100,82 +100,71 @@ mod test
 {
 	mod bus
 	{
-		mod read
+		use crate::{
+			bus::{self, Bus},
+			uart::Uart,
+		};
+
+		#[test]
+		fn read_u8()
 		{
-			use crate::{
-				bus::{self, Bus},
-				uart::Uart,
-			};
+			let mut uart = Uart::new();
+			uart.registers = vec![1, 2, 3];
+			assert_eq!(1, uart.read::<u8>(0).unwrap());
+		}
 
-			#[test]
-			fn u8()
-			{
-				let mut uart = Uart::new();
-				uart.registers = vec![1, 2, 3];
-				assert_eq!(1, uart.read::<u8>(0).unwrap());
-			}
-
-			#[test]
-			fn u64()
-			{
-				let mut uart = Uart::new();
-				uart.registers = vec![255, 255, 255, 255, 255, 255, 255, 255];
-				assert_eq!(
+		#[test]
+		fn read_u64()
+		{
+			let mut uart = Uart::new();
+			uart.registers = vec![255, 255, 255, 255, 255, 255, 255, 255];
+			assert_eq!(
                     0b11111111_11111111_11111111_11111111_11111111_11111111_11111111_11111111,
                     uart.read::<u64>(0).unwrap()
                 );
-			}
-
-			#[test]
-			fn out_of_bounds_returns_error()
-			{
-				let mut uart = Uart::new();
-				let msg = format!(
-					"uart: memory length: {}, max read address: {}",
-					8, 8
-				);
-				let expected =
-					Err(bus::Error::new(bus::ErrorKind::OutOfBounds, &msg));
-
-				let actual = uart.read::<u8>(8);
-
-				assert_eq!(
-					actual, expected,
-					"expected {:?}, but was {:?}",
-					expected, actual
-				);
-			}
 		}
-		mod write
+
+		#[test]
+		fn read_out_of_bounds_returns_error()
 		{
-			use crate::bus::{self, Bus};
-			use crate::uart::Uart;
+			let mut uart = Uart::new();
+			let msg =
+				format!("uart: memory length: {}, max read address: {}", 8, 8);
+			let expected =
+				Err(bus::Error::new(bus::ErrorKind::OutOfBounds, &msg));
 
-			#[test]
-			fn u64()
-			{
-				let mut uart = Uart::new();
-				uart.write(0usize, 0b00000001_00000001_00000001_00000001_00000001_00000001_00000001_00000001u64).unwrap();
-				assert_eq!(vec![1, 1, 1, 1, 1, 1, 1, 1], uart.registers);
-			}
+			let actual = uart.read::<u8>(8);
 
-			#[test]
-			fn out_of_bounds_returns_error()
-			{
-				let mut uart = Uart::new();
-				let msg = format!(
-					"uart: memory length: {}, max write address: {}",
-					8, 8
-				);
-				let expected =
-					Err(bus::Error::new(bus::ErrorKind::OutOfBounds, &msg));
+			assert_eq!(
+				actual, expected,
+				"expected {:?}, but was {:?}",
+				expected, actual
+			);
+		}
 
-				let actual = uart.write(8usize, 1u8);
+		#[test]
+		fn write_u64()
+		{
+			let mut uart = Uart::new();
+			uart.write(0usize, 0b00000001_00000001_00000001_00000001_00000001_00000001_00000001_00000001u64).unwrap();
+			assert_eq!(vec![1, 1, 1, 1, 1, 1, 1, 1], uart.registers);
+		}
 
-				assert_eq!(expected, actual);
-			}
+		#[test]
+		fn write_out_of_bounds_returns_error()
+		{
+			let mut uart = Uart::new();
+			let msg =
+				format!("uart: memory length: {}, max write address: {}", 8, 8);
+			let expected =
+				Err(bus::Error::new(bus::ErrorKind::OutOfBounds, &msg));
+
+			let actual = uart.write(8usize, 1u8);
+
+			assert_eq!(expected, actual);
 		}
 	}
+
 	mod line_status_register
 	{
 		use crate::bus::Bus;
