@@ -301,15 +301,16 @@ impl Insn
 			},
 		}
 
+		use InsnType::*;
 		match self.insn_type {
-			InsnType::U => {
+			U => {
 				self.imm = (input & IMM_UTYPE_MASK) as i32;
 				self.rd = field_get!(input, RD, u32);
 
 				self.imm = sign_extend!(self.imm, 31, i32);
 			},
 
-			InsnType::I => {
+			I => {
 				self.imm = field_get!(input, IMM_ITYPE, i32);
 				self.rd = field_get!(input, RD, u32);
 				self.rs1 = field_get!(input, RS1, u32);
@@ -318,7 +319,7 @@ impl Insn
 				self.imm = sign_extend!(self.imm, 11, i32);
 			},
 
-			InsnType::R => {
+			R => {
 				self.rd = field_get!(input, RD, u32);
 				self.rs1 = field_get!(input, RS1, u32);
 				self.rs2 = field_get!(input, RS2, u32);
@@ -326,7 +327,7 @@ impl Insn
 				self.func7 = field_get!(input, FUNC7, u32);
 			},
 
-			InsnType::S => {
+			S => {
 				self.rs1 = field_get!(input, RS1, u32);
 				self.rs2 = field_get!(input, RS2, u32);
 				self.func3 = field_get!(input, FUNC3, u32);
@@ -338,7 +339,7 @@ impl Insn
 				self.imm = sign_extend!(self.imm, 11, i32);
 			},
 
-			InsnType::B => {
+			B => {
 				self.rs1 = field_get!(input, RS1, u32);
 				self.rs2 = field_get!(input, RS2, u32);
 				self.func3 = field_get!(input, FUNC3, u32);
@@ -355,7 +356,7 @@ impl Insn
 				self.imm = sign_extend!(self.imm, 12, i32);
 			},
 
-			InsnType::J => {
+			J => {
 				self.rd = field_get!(input, RD, u32);
 
 				let imm_10_1 = field_get!(input, IMM10_1_JTYPE, u32);
