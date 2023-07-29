@@ -1,4 +1,4 @@
-use crate::bus;
+use crate::{bus, lebytes::LeBytes};
 
 struct Uart
 {
@@ -17,47 +17,48 @@ struct Uart
 
 impl Uart
 {
-	fn r(&self, address: RegisterAddress) -> Result<u8, Error>
+	fn read_at(&self, address: RegisterAddress) -> Result<u8, Error>
 	{
+		use RegisterAddress::*;
 		return match address {
-			RegisterAddress::ReceiverBuffer => Ok(self.receiver_buffer.read()),
-			RegisterAddress::TransmitterHolding => Err(Error),
-			RegisterAddress::InterruptEnable => {
-				Ok(self.interrupt_enable.read())
-			},
-			RegisterAddress::InterruptIdent => Err(Error),
-			RegisterAddress::LineControl => Ok(self.line_control.read()),
-			RegisterAddress::ModemControl => Ok(self.modem_control.read()),
-			RegisterAddress::LineStatus => Ok(self.line_status.read()),
-			RegisterAddress::ModemStatus => Ok(self.modem_status.read()),
-			RegisterAddress::Scratch => Ok(self.scratch.read()),
+			ReceiverBuffer => Ok(self.receiver_buffer.read()),
+			TransmitterHolding => Err(Error),
+			InterruptEnable => Ok(self.interrupt_enable.read()),
+			InterruptIdent => Err(Error),
+			LineControl => Ok(self.line_control.read()),
+			ModemControl => Ok(self.modem_control.read()),
+			LineStatus => Ok(self.line_status.read()),
+			ModemStatus => Ok(self.modem_status.read()),
+			Scratch => Ok(self.scratch.read()),
 		};
 	}
 
-	fn w(&self, address: RegisterAddress, value: u8) -> Result<(), Error>
+	fn write_at(&self, address: RegisterAddress, value: u8)
+		-> Result<(), Error>
 	{
+		use RegisterAddress::*;
 		return match address {
-			RegisterAddress::ReceiverBuffer => Err(Error),
-			RegisterAddress::TransmitterHolding => {
+			ReceiverBuffer => Err(Error),
+			TransmitterHolding => {
 				self.transmitter_holding.write(value);
 				Ok(())
 			},
-			RegisterAddress::InterruptEnable => {
+			InterruptEnable => {
 				self.interrupt_enable.write(value);
 				Ok(())
 			},
-			RegisterAddress::InterruptIdent => Err(Error),
-			RegisterAddress::LineControl => {
+			InterruptIdent => Err(Error),
+			LineControl => {
 				self.line_control.write(value);
 				Ok(())
 			},
-			RegisterAddress::ModemControl => {
+			ModemControl => {
 				self.modem_control.write(value);
 				Ok(())
 			},
-			RegisterAddress::LineStatus => Err(Error),
-			RegisterAddress::ModemStatus => Err(Error),
-			RegisterAddress::Scratch => {
+			LineStatus => Err(Error),
+			ModemStatus => Err(Error),
+			Scratch => {
 				self.scratch.write(value);
 				Ok(())
 			},
@@ -92,27 +93,24 @@ impl bus::Bus for Uart
 		T: crate::lebytes::LeBytes,
 		[(); <T as crate::lebytes::LeBytes>::SIZE]:,
 	{
-		let addr = match address {
-			0 => RegisterAddress::ReceiverBuffer,
-			1 => RegisterAddress::InterruptEnable,
-			2 => RegisterAddress::InterruptIdent,
-			3 => RegisterAddress::ModemControl,
-			4 => RegisterAddress::LineControl,
-			5 => RegisterAddress::ModemStatus,
-			6 => RegisterAddress::LineStatus,
-			7 => RegisterAddress::Scratch,
-			_ => {
+		return match address.try_into() {
+			Ok(address) => {
+				match self.read_at(address) {
+					Ok(v) => {
+						let mut ret = [0; <T as LeBytes>::SIZE];
+						ret[0] = v;
+						Ok(T::from_le_bytes(ret))
+					},
+					Err(e) => {
+						todo!("{:?}", e);
+					},
+				}
+			},
+			Err(_) => {
 				return Err(bus::Error::new(
 					bus::ErrorKind::OutOfBounds,
-					&format!("invalid read address {}", address),
-				))
-			},
-		};
-
-		return match self.r(addr) {
-			Ok(v) => Ok(u8::to_le_bytes(v)),
-			Err(e) => {
-				todo!("convert the uart error to a bus error and return it")
+					&format!("can not read at address {}", address),
+				));
 			},
 		};
 	}
@@ -147,14 +145,14 @@ impl From<RegisterAddress> for u8
 		use RegisterAddress::*;
 		return match val {
 			ReceiverBuffer => 0,
-			TransmitterHolding => 0,
-			InterruptEnable => 1,
-			InterruptIdent => 2,
-			LineControl => 3,
-			ModemControl => 4,
-			LineStatus => 5,
-			ModemStatus => 6,
-			Scratch => 7,
+			TransmitterHolding => 1,
+			InterruptEnable => 2,
+			InterruptIdent => 3,
+			LineControl => 4,
+			ModemControl => 5,
+			LineStatus => 6,
+			ModemStatus => 7,
+			Scratch => 8,
 		};
 	}
 }
@@ -163,17 +161,27 @@ impl From<RegisterAddress> for usize
 {
 	fn from(value: RegisterAddress) -> usize
 	{
+		return u8::from(value) as usize;
+	}
+}
+
+impl TryFrom<usize> for RegisterAddress
+{
+	type Error = Error;
+	fn try_from(value: usize) -> Result<Self, Self::Error>
+	{
 		use RegisterAddress::*;
 		return match value {
-			ReceiverBuffer => 0,
-			TransmitterHolding => 0,
-			InterruptEnable => 1,
-			InterruptIdent => 2,
-			LineControl => 3,
-			ModemControl => 4,
-			LineStatus => 5,
-			ModemStatus => 6,
-			Scratch => 7,
+			0 => Ok(ReceiverBuffer),
+			1 => Ok(TransmitterHolding),
+			2 => Ok(InterruptEnable),
+			3 => Ok(InterruptIdent),
+			4 => Ok(LineControl),
+			5 => Ok(ModemControl),
+			6 => Ok(LineStatus),
+			7 => Ok(ModemStatus),
+			8 => Ok(Scratch),
+			_ => Err(Error),
 		};
 	}
 }
@@ -215,7 +223,7 @@ impl ReadOnlyRegister
 {
 	fn read(&self) -> u8
 	{
-		todo!();
+		return self.bits;
 	}
 }
 
@@ -252,6 +260,7 @@ impl Default for WriteOnlyRegister
 	}
 }
 
+#[derive(Debug)]
 struct Error;
 
 #[cfg(test)]
