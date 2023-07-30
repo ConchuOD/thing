@@ -143,7 +143,10 @@ impl bus::Bus for Uart
 
 		let byte = bytes[0];
 		return match self.write_at(addr, byte) {
-			Ok(_) => Ok(()),
+			Ok(_) => {
+				self.receiver_buffer.bits = self.transmitter_holding.bits;
+				Ok(())
+			},
 			Err(_) => {
 				Err(bus::Error::new(
 					bus::ErrorKind::DisallowedWrite,
@@ -311,34 +314,44 @@ mod test
 	use crate::bus::Bus;
 	use crate::uart::ReadOnlyRegister;
 
-	use super::{Uart, WriteOnlyRegister};
+	use super::{RegisterAddress, Uart, WriteOnlyRegister};
 
 	#[test]
 	fn reading_from_address_0_returns_rbr_value()
 	{
+		let v = 27u8;
 		let mut uart = Uart {
 			receiver_buffer: ReadOnlyRegister {
-				bits: 27,
+				bits: v,
 			},
 			..Uart::default()
 		};
-		let expected = 27u8;
 		let actual = uart.read(0).unwrap();
 
-		assert_eq!(expected, actual);
+		assert_eq!(v, actual);
 	}
 
 	#[test]
 	fn writing_to_address_0_writes_to_thr()
 	{
 		let mut uart = Uart::default();
-		let expected = Uart {
-			transmitter_holding: WriteOnlyRegister {
-				bits: 27,
-			},
-			..Uart::default()
+		let expected = WriteOnlyRegister {
+			bits: 27,
 		};
 		uart.write(0usize, 27u8).unwrap();
-		assert_eq!(uart, expected);
+		assert_eq!(uart.transmitter_holding, expected);
+	}
+
+	#[test]
+	fn rbr_and_thr_are_the_same_register()
+	{
+		let mut uart = Uart::default();
+		let value = 23u8;
+		uart.write(RegisterAddress::ReceiverBuffer, value).unwrap();
+		let res = uart
+			.read::<u8>(RegisterAddress::TransmitterHolding.into())
+			.unwrap();
+
+		assert_eq!(res, value);
 	}
 }
