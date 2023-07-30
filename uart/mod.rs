@@ -97,28 +97,31 @@ impl bus::Bus for Uart
 		T: crate::lebytes::LeBytes,
 		[(); <T as crate::lebytes::LeBytes>::SIZE]:,
 	{
-		return match address.try_into() {
-			Ok(mut address) => {
-				if address == RegisterAddress::TransmitterHolding {
-					address = RegisterAddress::ReceiverBuffer;
-				}
-				match self.read_at(address) {
-					Ok(v) => {
-						let mut ret = [0; <T as LeBytes>::SIZE];
-						ret[0] = v;
-						Ok(T::from_le_bytes(ret))
-					},
-					Err(e) => {
-						todo!("{:?}", e);
-					},
-				}
-			},
-			Err(_) => {
-				return Err(bus::Error::new(
-					bus::ErrorKind::OutOfBounds,
-					&format!("can not read at address {}", address),
-				));
-			},
+		if <T as LeBytes>::SIZE > 1 {
+			return Err(bus::Error::new(
+				bus::ErrorKind::Unimplemented,
+				"multi-byte reads are not implemented yet",
+			));
+		}
+		return if let Ok(mut address) = address.try_into() {
+			if address == RegisterAddress::TransmitterHolding {
+				address = RegisterAddress::ReceiverBuffer;
+			}
+			match self.read_at(address) {
+				Ok(value) => {
+					let mut ret = [0; <T as LeBytes>::SIZE];
+					ret[0] = value;
+					Ok(T::from_le_bytes(ret))
+				},
+				Err(e) => {
+					todo!("{:?}", e);
+				},
+			}
+		} else {
+			return Err(bus::Error::new(
+				bus::ErrorKind::OutOfBounds,
+				&format!("can not read at address {}", address),
+			));
 		};
 	}
 
@@ -137,7 +140,7 @@ impl bus::Bus for Uart
 		if bytes.len() > 1 {
 			return Err(bus::Error::new(
 				bus::ErrorKind::Unimplemented,
-				"multi-byte writes are not supported yet",
+				"multi-byte writes are not implemented yet",
 			));
 		}
 
@@ -311,7 +314,7 @@ struct Error;
 #[cfg(test)]
 mod test
 {
-	use crate::bus::Bus;
+	use crate::bus::{self, Bus};
 	use crate::uart::ReadOnlyRegister;
 
 	use super::{RegisterAddress, Uart, WriteOnlyRegister};
@@ -353,5 +356,32 @@ mod test
 			.unwrap();
 
 		assert_eq!(res, value);
+	}
+	#[test]
+	fn multi_byte_write_causes_error()
+	{
+		let mut uart = Uart::default();
+		let expected = Err(bus::Error::new(
+			bus::ErrorKind::Unimplemented,
+			"multi-byte writes are not implemented yet",
+		));
+
+		let res = uart
+			.write(RegisterAddress::TransmitterHolding, 0b00000001_00000001u16);
+
+		assert_eq!(res, expected);
+	}
+	#[test]
+	fn multi_byte_read_causes_error()
+	{
+		let mut uart = Uart::default();
+		let expected = Err(bus::Error::new(
+			bus::ErrorKind::Unimplemented,
+			"multi-byte reads are not implemented yet",
+		));
+
+		let res = uart.read::<u16>(RegisterAddress::TransmitterHolding.into());
+
+		assert_eq!(res, expected);
 	}
 }
