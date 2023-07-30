@@ -10,6 +10,7 @@ pub enum ErrorKind
 {
 	Unimplemented,
 	OutOfBounds,
+	DisallowedWrite,
 }
 
 #[derive(Debug, PartialEq)]

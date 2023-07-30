@@ -1,5 +1,8 @@
+use std::fmt::Display;
+
 use crate::{bus, lebytes::LeBytes};
 
+#[derive(Debug, PartialEq)]
 struct Uart
 {
 	receiver_buffer: ReadOnlyRegister,
@@ -33,8 +36,9 @@ impl Uart
 		};
 	}
 
-	fn write_at(&self, address: RegisterAddress, value: u8)
-		-> Result<(), Error>
+	fn write_at(
+		&mut self, address: RegisterAddress, value: u8,
+	) -> Result<(), Error>
 	{
 		use RegisterAddress::*;
 		return match address {
@@ -94,7 +98,10 @@ impl bus::Bus for Uart
 		[(); <T as crate::lebytes::LeBytes>::SIZE]:,
 	{
 		return match address.try_into() {
-			Ok(address) => {
+			Ok(mut address) => {
+				if address == RegisterAddress::TransmitterHolding {
+					address = RegisterAddress::ReceiverBuffer;
+				}
 				match self.read_at(address) {
 					Ok(v) => {
 						let mut ret = [0; <T as LeBytes>::SIZE];
@@ -121,10 +128,33 @@ impl bus::Bus for Uart
 		U: Into<usize>,
 		[(); <T as crate::lebytes::LeBytes>::SIZE]:,
 	{
-		todo!()
+		let mut addr: RegisterAddress = address.into().try_into().unwrap();
+		if addr == RegisterAddress::ReceiverBuffer {
+			addr = RegisterAddress::TransmitterHolding;
+		}
+		let bytes: [u8; <T as LeBytes>::SIZE] = value.to_le_bytes();
+
+		if bytes.len() > 1 {
+			return Err(bus::Error::new(
+				bus::ErrorKind::Unimplemented,
+				"multi-byte writes are not supported yet",
+			));
+		}
+
+		let byte = bytes[0];
+		return match self.write_at(addr, byte) {
+			Ok(_) => Ok(()),
+			Err(_) => {
+				Err(bus::Error::new(
+					bus::ErrorKind::DisallowedWrite,
+					&format!("can not write register at address {}", addr),
+				))
+			},
+		};
 	}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum RegisterAddress
 {
 	ReceiverBuffer = 0,
@@ -186,6 +216,16 @@ impl TryFrom<usize> for RegisterAddress
 	}
 }
 
+impl Display for RegisterAddress
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+	{
+		let v: usize = (*self).into();
+		return write!(f, "{}", v);
+	}
+}
+
+#[derive(Debug, PartialEq)]
 struct Register
 {
 	bits: u8,
@@ -198,7 +238,7 @@ impl Register
 		todo!();
 	}
 
-	fn write(&self, v: u8)
+	fn write(&self, _v: u8)
 	{
 		todo!();
 	}
@@ -214,6 +254,7 @@ impl Default for Register
 	}
 }
 
+#[derive(Debug, PartialEq)]
 struct ReadOnlyRegister
 {
 	bits: u8,
@@ -237,6 +278,7 @@ impl Default for ReadOnlyRegister
 	}
 }
 
+#[derive(Debug, PartialEq)]
 struct WriteOnlyRegister
 {
 	bits: u8,
@@ -244,9 +286,9 @@ struct WriteOnlyRegister
 
 impl WriteOnlyRegister
 {
-	fn write(&self, v: u8)
+	fn write(&mut self, v: u8)
 	{
-		todo!();
+		self.bits = v;
 	}
 }
 
@@ -267,9 +309,9 @@ struct Error;
 mod test
 {
 	use crate::bus::Bus;
-	use crate::uart::{ReadOnlyRegister, RegisterAddress};
+	use crate::uart::ReadOnlyRegister;
 
-	use super::Uart;
+	use super::{Uart, WriteOnlyRegister};
 
 	#[test]
 	fn reading_from_address_0_returns_rbr_value()
@@ -281,8 +323,22 @@ mod test
 			..Uart::default()
 		};
 		let expected = 27u8;
-		let actual = uart.read(RegisterAddress::ReceiverBuffer.into()).unwrap();
+		let actual = uart.read(0).unwrap();
 
 		assert_eq!(expected, actual);
+	}
+
+	#[test]
+	fn writing_to_address_0_writes_to_thr()
+	{
+		let mut uart = Uart::default();
+		let expected = Uart {
+			transmitter_holding: WriteOnlyRegister {
+				bits: 27,
+			},
+			..Uart::default()
+		};
+		uart.write(0usize, 27u8).unwrap();
+		assert_eq!(uart, expected);
 	}
 }
