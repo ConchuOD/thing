@@ -25,9 +25,9 @@ impl Uart
 		use RegisterAddress::*;
 		return match address {
 			ReceiverBuffer => Ok(self.receiver_buffer.read()),
-			TransmitterHolding => Err(Error),
+			TransmitterHolding => Err(Error::DisallowedRead),
 			InterruptEnable => Ok(self.interrupt_enable.read()),
-			InterruptIdent => Err(Error),
+			InterruptIdent => Err(Error::DisallowedRead),
 			LineControl => Ok(self.line_control.read()),
 			ModemControl => Ok(self.modem_control.read()),
 			LineStatus => Ok(self.line_status.read()),
@@ -42,7 +42,7 @@ impl Uart
 	{
 		use RegisterAddress::*;
 		return match address {
-			ReceiverBuffer => Err(Error),
+			ReceiverBuffer => Err(Error::DisallowedWrite),
 			TransmitterHolding => {
 				self.transmitter_holding.write(value);
 				Ok(())
@@ -51,7 +51,7 @@ impl Uart
 				self.interrupt_enable.write(value);
 				Ok(())
 			},
-			InterruptIdent => Err(Error),
+			InterruptIdent => Err(Error::DisallowedWrite),
 			LineControl => {
 				self.line_control.write(value);
 				Ok(())
@@ -60,8 +60,8 @@ impl Uart
 				self.modem_control.write(value);
 				Ok(())
 			},
-			LineStatus => Err(Error),
-			ModemStatus => Err(Error),
+			LineStatus => Err(Error::DisallowedWrite),
+			ModemStatus => Err(Error::DisallowedWrite),
 			Scratch => {
 				self.scratch.write(value);
 				Ok(())
@@ -103,26 +103,14 @@ impl bus::Bus for Uart
 				"multi-byte reads are not implemented yet",
 			));
 		}
-		return if let Ok(mut address) = address.try_into() {
-			if address == RegisterAddress::TransmitterHolding {
-				address = RegisterAddress::ReceiverBuffer;
-			}
-			match self.read_at(address) {
-				Ok(value) => {
-					let mut ret = [0; <T as LeBytes>::SIZE];
-					ret[0] = value;
-					Ok(T::from_le_bytes(ret))
-				},
-				Err(e) => {
-					todo!("{:?}", e);
-				},
-			}
-		} else {
-			return Err(bus::Error::new(
-				bus::ErrorKind::OutOfBounds,
-				&format!("can not read at address {}", address),
-			));
-		};
+
+		let mut address = RegisterAddress::try_from(address)?;
+		if address == RegisterAddress::TransmitterHolding {
+			address = RegisterAddress::ReceiverBuffer;
+		}
+		let mut return_bytes = [0; <T as LeBytes>::SIZE];
+		return_bytes[0] = self.read_at(address)?;
+		return Ok(T::from_le_bytes(return_bytes));
 	}
 
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
@@ -131,12 +119,7 @@ impl bus::Bus for Uart
 		U: Into<usize>,
 		[(); <T as crate::lebytes::LeBytes>::SIZE]:,
 	{
-		let mut addr: RegisterAddress = address.into().try_into().unwrap();
-		if addr == RegisterAddress::ReceiverBuffer {
-			addr = RegisterAddress::TransmitterHolding;
-		}
 		let bytes: [u8; <T as LeBytes>::SIZE] = value.to_le_bytes();
-
 		if bytes.len() > 1 {
 			return Err(bus::Error::new(
 				bus::ErrorKind::Unimplemented,
@@ -144,19 +127,13 @@ impl bus::Bus for Uart
 			));
 		}
 
-		let byte = bytes[0];
-		return match self.write_at(addr, byte) {
-			Ok(_) => {
-				self.receiver_buffer.bits = self.transmitter_holding.bits;
-				Ok(())
-			},
-			Err(_) => {
-				Err(bus::Error::new(
-					bus::ErrorKind::DisallowedWrite,
-					&format!("can not write register at address {}", addr),
-				))
-			},
-		};
+		let mut address: RegisterAddress = address.into().try_into()?;
+		if address == RegisterAddress::ReceiverBuffer {
+			address = RegisterAddress::TransmitterHolding;
+		}
+		self.write_at(address, bytes[0])?;
+		self.receiver_buffer.bits = self.transmitter_holding.bits;
+		return Ok(());
 	}
 }
 
@@ -172,6 +149,27 @@ enum RegisterAddress
 	LineStatus = 6,
 	ModemStatus = 7,
 	Scratch = 8,
+}
+
+impl TryFrom<usize> for RegisterAddress
+{
+	type Error = AddressConvertError;
+	fn try_from(value: usize) -> Result<Self, Self::Error>
+	{
+		use RegisterAddress::*;
+		return match value {
+			0 => Ok(ReceiverBuffer),
+			1 => Ok(TransmitterHolding),
+			2 => Ok(InterruptEnable),
+			3 => Ok(InterruptIdent),
+			4 => Ok(LineControl),
+			5 => Ok(ModemControl),
+			6 => Ok(LineStatus),
+			7 => Ok(ModemStatus),
+			8 => Ok(Scratch),
+			_ => Err(AddressConvertError),
+		};
+	}
 }
 
 impl From<RegisterAddress> for u8
@@ -201,33 +199,24 @@ impl From<RegisterAddress> for usize
 	}
 }
 
-impl TryFrom<usize> for RegisterAddress
-{
-	type Error = Error;
-	fn try_from(value: usize) -> Result<Self, Self::Error>
-	{
-		use RegisterAddress::*;
-		return match value {
-			0 => Ok(ReceiverBuffer),
-			1 => Ok(TransmitterHolding),
-			2 => Ok(InterruptEnable),
-			3 => Ok(InterruptIdent),
-			4 => Ok(LineControl),
-			5 => Ok(ModemControl),
-			6 => Ok(LineStatus),
-			7 => Ok(ModemStatus),
-			8 => Ok(Scratch),
-			_ => Err(Error),
-		};
-	}
-}
-
 impl Display for RegisterAddress
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
 	{
 		let v: usize = (*self).into();
 		return write!(f, "{}", v);
+	}
+}
+
+#[derive(Debug)]
+struct AddressConvertError;
+
+impl From<AddressConvertError> for bus::Error
+{
+	fn from(value: AddressConvertError) -> Self
+	{
+		_ = value; // NOTE: nothing interesting in here for now.
+		return bus::Error::new(bus::ErrorKind::OutOfBounds, "todo, put a better error message here. needs more context. But uart::AddressConvertError implies that one tried to convert a numerical address into a uart address that does not exist");
 	}
 }
 
@@ -241,12 +230,12 @@ impl Register
 {
 	fn read(&self) -> u8
 	{
-		todo!();
+		todo!("Register::read is not implemented yet!");
 	}
 
 	fn write(&self, _v: u8)
 	{
-		todo!();
+		todo!("Register::write is not implemented yet!");
 	}
 }
 
@@ -309,7 +298,22 @@ impl Default for WriteOnlyRegister
 }
 
 #[derive(Debug)]
-struct Error;
+enum Error
+{
+	DisallowedRead,
+	DisallowedWrite,
+}
+
+impl From<Error> for bus::Error
+{
+	fn from(value: Error) -> Self
+	{
+		match value {
+			Error::DisallowedRead => todo!("bus error disallowed read"),
+			Error::DisallowedWrite => todo!("bus disallowed write"),
+		}
+	}
+}
 
 #[cfg(test)]
 mod test
