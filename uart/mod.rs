@@ -1,4 +1,5 @@
-use std::fmt::Display;
+use std::io::Write;
+use std::{fmt::Display, io};
 
 use crate::{bus, lebytes::LeBytes};
 
@@ -133,7 +134,23 @@ impl bus::Bus for Uart
 		}
 		self.write_at(address, bytes[0])?;
 		self.receiver_buffer.bits = self.transmitter_holding.bits;
+		let bits = self.transmitter_holding.bits;
+		write!(self, "{}", bits).unwrap();
 		return Ok(());
+	}
+}
+
+impl io::Write for Uart
+{
+	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize>
+	{
+		let mut stdout = std::io::stdout();
+		return stdout.write(buf);
+	}
+
+	fn flush(&mut self) -> std::io::Result<()>
+	{
+		panic!("std::io::Write::flush is not implemented for Uart");
 	}
 }
 
@@ -343,9 +360,9 @@ mod test
 	{
 		let mut uart = Uart::default();
 		let expected = WriteOnlyRegister {
-			bits: 27,
+			bits: b'f',
 		};
-		uart.write(0usize, 27u8).unwrap();
+		uart.write(0usize, b'f').unwrap();
 		assert_eq!(uart.transmitter_holding, expected);
 	}
 
@@ -353,7 +370,7 @@ mod test
 	fn rbr_and_thr_are_the_same_register()
 	{
 		let mut uart = Uart::default();
-		let value = 23u8;
+		let value = b'a';
 		uart.write(RegisterAddress::ReceiverBuffer, value).unwrap();
 		let res = uart
 			.read::<u8>(RegisterAddress::TransmitterHolding.into())
@@ -387,5 +404,12 @@ mod test
 		let res = uart.read::<u16>(RegisterAddress::TransmitterHolding.into());
 
 		assert_eq!(res, expected);
+	}
+	#[test]
+	fn uart_has_output()
+	{
+		let mut uart = Uart::default();
+		let output: char = 'a';
+		uart.write(RegisterAddress::TransmitterHolding, output as u8).unwrap();
 	}
 }
