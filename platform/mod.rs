@@ -6,6 +6,7 @@ use crate::bus::{self, Bus};
 use crate::hart::{Hart, RegisterNames};
 use crate::insn::Insn;
 use crate::lebytes::LeBytes;
+use crate::uart::Uart;
 use std::error::Error;
 
 fn u8s_to_insn(input: &[u8; 4]) -> u32
@@ -30,6 +31,7 @@ pub struct Platform
 {
 	pub hart: Hart,
 	memory: Memory,
+	uart: Uart,
 	reservation_sets: Vec<ReservationSet>,
 }
 
@@ -204,6 +206,11 @@ impl Bus for Platform
 			return self.memory.read(address - MEMORY_BASE);
 		}
 
+		let uart_base = 0x2000_0000;
+		if (uart_base..uart_base + 0x400).contains(&address) {
+			return self.uart.read(address - uart_base);
+		}
+
 		return Err(bus::Error::new(
 			bus::ErrorKind::Unimplemented,
 			&format!("addr: {:}", address),
@@ -220,6 +227,11 @@ impl Bus for Platform
 		let memory = &self.memory;
 		if (memory.start..memory.end).contains(&address) {
 			return self.memory.write(address - MEMORY_BASE, value);
+		}
+
+		let uart_base = 0x2000_0000;
+		if (uart_base..uart_base + 0x400).contains(&address) {
+			return self.uart.write(address - uart_base, value);
 		}
 
 		return Err(bus::Error::new(

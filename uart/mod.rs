@@ -4,7 +4,7 @@ use std::{fmt::Display, io};
 use crate::{bus, lebytes::LeBytes};
 
 #[derive(Debug, PartialEq)]
-struct Uart
+pub struct Uart
 {
 	receiver_buffer: ReadOnlyRegister,
 	transmitter_holding: WriteOnlyRegister,
@@ -104,7 +104,6 @@ impl bus::Bus for Uart
 				"multi-byte reads are not implemented yet",
 			));
 		}
-
 		let mut address = RegisterAddress::try_from(address)?;
 		if address == RegisterAddress::TransmitterHolding {
 			address = RegisterAddress::ReceiverBuffer;
