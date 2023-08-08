@@ -1,10 +1,10 @@
+use std::fmt::Display;
 use std::io::Write;
-use std::{fmt::Display, io};
 
 use crate::{bus, lebytes::LeBytes};
 
-#[derive(Debug, PartialEq)]
-struct Uart
+#[derive(Debug, PartialEq, Default)]
+struct UartRegisters
 {
 	receiver_buffer: ReadOnlyRegister,
 	transmitter_holding: WriteOnlyRegister,
@@ -19,21 +19,39 @@ struct Uart
 	divisor_latch_ms: Register,
 }
 
-impl Uart
+#[derive(Debug, PartialEq)]
+struct Uart<'a, T>
+where
+	&'a mut T: std::io::Write,
 {
+	registers: UartRegisters,
+	output: &'a mut T,
+}
+
+impl<'a, T> Uart<'a, T>
+where
+	&'a mut T: std::io::Write,
+{
+	fn new(output: &'a mut T) -> Self
+	{
+		return Self {
+			registers: UartRegisters::default(),
+			output,
+		};
+	}
 	fn read_at(&self, address: RegisterAddress) -> Result<u8, Error>
 	{
 		use RegisterAddress::*;
 		return match address {
-			ReceiverBuffer => Ok(self.receiver_buffer.read()),
+			ReceiverBuffer => Ok(self.registers.receiver_buffer.read()),
 			TransmitterHolding => Err(Error::DisallowedRead),
-			InterruptEnable => Ok(self.interrupt_enable.read()),
+			InterruptEnable => Ok(self.registers.interrupt_enable.read()),
 			InterruptIdent => Err(Error::DisallowedRead),
-			LineControl => Ok(self.line_control.read()),
-			ModemControl => Ok(self.modem_control.read()),
-			LineStatus => Ok(self.line_status.read()),
-			ModemStatus => Ok(self.modem_status.read()),
-			Scratch => Ok(self.scratch.read()),
+			LineControl => Ok(self.registers.line_control.read()),
+			ModemControl => Ok(self.registers.modem_control.read()),
+			LineStatus => Ok(self.registers.line_status.read()),
+			ModemStatus => Ok(self.registers.modem_status.read()),
+			Scratch => Ok(self.registers.scratch.read()),
 		};
 	}
 
@@ -45,53 +63,35 @@ impl Uart
 		return match address {
 			ReceiverBuffer => Err(Error::DisallowedWrite),
 			TransmitterHolding => {
-				self.transmitter_holding.write(value);
+				self.registers.transmitter_holding.write(value);
 				Ok(())
 			},
 			InterruptEnable => {
-				self.interrupt_enable.write(value);
+				self.registers.interrupt_enable.write(value);
 				Ok(())
 			},
 			InterruptIdent => Err(Error::DisallowedWrite),
 			LineControl => {
-				self.line_control.write(value);
+				self.registers.line_control.write(value);
 				Ok(())
 			},
 			ModemControl => {
-				self.modem_control.write(value);
+				self.registers.modem_control.write(value);
 				Ok(())
 			},
 			LineStatus => Err(Error::DisallowedWrite),
 			ModemStatus => Err(Error::DisallowedWrite),
 			Scratch => {
-				self.scratch.write(value);
+				self.registers.scratch.write(value);
 				Ok(())
 			},
 		};
 	}
 }
 
-impl Default for Uart
-{
-	fn default() -> Self
-	{
-		return Uart {
-			receiver_buffer: ReadOnlyRegister::default(),
-			transmitter_holding: WriteOnlyRegister::default(),
-			interrupt_enable: Register::default(),
-			interrupt_ident: ReadOnlyRegister::default(),
-			line_control: Register::default(),
-			modem_control: Register::default(),
-			line_status: Register::default(),
-			modem_status: Register::default(),
-			scratch: Register::default(),
-			divisor_latch_ls: Register::default(),
-			divisor_latch_ms: Register::default(),
-		};
-	}
-}
-
-impl bus::Bus for Uart
+impl<'a, V> bus::Bus for Uart<'a, V>
+where
+	&'a mut V: std::io::Write,
 {
 	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
 	where
@@ -133,24 +133,11 @@ impl bus::Bus for Uart
 			address = RegisterAddress::TransmitterHolding;
 		}
 		self.write_at(address, bytes[0])?;
-		self.receiver_buffer.bits = self.transmitter_holding.bits;
-		let bits = self.transmitter_holding.bits;
-		write!(self, "{}", bits).unwrap();
+		self.registers.receiver_buffer.bits =
+			self.registers.transmitter_holding.bits;
+		let bits = self.registers.transmitter_holding.bits;
+		self.output.write_all(&[bits]).unwrap();
 		return Ok(());
-	}
-}
-
-impl io::Write for Uart
-{
-	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize>
-	{
-		let mut stdout = std::io::stdout();
-		return stdout.write(buf);
-	}
-
-	fn flush(&mut self) -> std::io::Result<()>
-	{
-		panic!("std::io::Write::flush is not implemented for Uart");
 	}
 }
 
@@ -336,40 +323,65 @@ impl From<Error> for bus::Error
 mod test
 {
 	use crate::bus::{self, Bus};
-	use crate::uart::ReadOnlyRegister;
+	use crate::uart::{ReadOnlyRegister, UartRegisters};
 
 	use super::{RegisterAddress, Uart, WriteOnlyRegister};
 
+	#[derive(Default)]
+	struct MockStdout
+	{
+		buf: Vec<u8>,
+	}
+	impl std::io::Write for MockStdout
+	{
+		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize>
+		{
+			return self.buf.write(buf);
+		}
+
+		fn flush(&mut self) -> std::io::Result<()>
+		{
+			return self.buf.flush();
+		}
+	}
 	#[test]
 	fn reading_from_address_0_returns_rbr_value()
 	{
 		let v = 27u8;
-		let mut uart = Uart {
-			receiver_buffer: ReadOnlyRegister {
-				bits: v,
+		let mut uart = Uart::<MockStdout> {
+			output: &mut MockStdout::default(),
+			registers: UartRegisters {
+				receiver_buffer: ReadOnlyRegister {
+					bits: v,
+				},
+				..Default::default()
 			},
-			..Uart::default()
 		};
+
 		let actual = uart.read(0).unwrap();
 
 		assert_eq!(v, actual);
 	}
-
 	#[test]
 	fn writing_to_address_0_writes_to_thr()
 	{
-		let mut uart = Uart::default();
+		let mock_stdout = &mut MockStdout {
+			buf: Vec::new(),
+		};
+		let mut uart = Uart::new(mock_stdout);
 		let expected = WriteOnlyRegister {
 			bits: b'f',
 		};
 		uart.write(0usize, b'f').unwrap();
-		assert_eq!(uart.transmitter_holding, expected);
+		assert_eq!(uart.registers.transmitter_holding, expected);
 	}
-
 	#[test]
 	fn rbr_and_thr_are_the_same_register()
 	{
-		let mut uart = Uart::default();
+		let mut stdout = MockStdout {
+			buf: Vec::new(),
+		};
+		let mut uart = Uart::<MockStdout>::new(&mut stdout);
 		let value = b'a';
 		uart.write(RegisterAddress::ReceiverBuffer, value).unwrap();
 		let res = uart
@@ -381,7 +393,10 @@ mod test
 	#[test]
 	fn multi_byte_write_causes_error()
 	{
-		let mut uart = Uart::default();
+		let mut stdout = MockStdout {
+			buf: Vec::new(),
+		};
+		let mut uart = Uart::<MockStdout>::new(&mut stdout);
 		let expected = Err(bus::Error::new(
 			bus::ErrorKind::Unimplemented,
 			"multi-byte writes are not implemented yet",
@@ -395,7 +410,10 @@ mod test
 	#[test]
 	fn multi_byte_read_causes_error()
 	{
-		let mut uart = Uart::default();
+		let mut stdout = MockStdout {
+			buf: Vec::new(),
+		};
+		let mut uart = Uart::<MockStdout>::new(&mut stdout);
 		let expected = Err(bus::Error::new(
 			bus::ErrorKind::Unimplemented,
 			"multi-byte reads are not implemented yet",
@@ -405,11 +423,40 @@ mod test
 
 		assert_eq!(res, expected);
 	}
+
 	#[test]
-	fn uart_has_output()
+	fn can_plug_output()
 	{
-		let mut uart = Uart::default();
-		let output: char = 'a';
-		uart.write(RegisterAddress::TransmitterHolding, output as u8).unwrap();
+		let mut stdout = MockStdout::default();
+		let s = &mut stdout;
+		let mut uart = Uart::new(s);
+		let bytes: Vec<u8> = "Hello, World!".bytes().collect();
+
+		for byte in &bytes {
+			println!("byte: {}, char: {}", byte, *byte as char);
+			uart.write(RegisterAddress::TransmitterHolding, *byte).unwrap();
+		}
+
+		assert_eq!(bytes, stdout.buf);
+	}
+
+	#[test]
+	fn can_output_to_file()
+	{
+		const TEST_FILE_PATH: &str = "test_output";
+		let mut file = std::fs::File::create(TEST_FILE_PATH).unwrap();
+		let mut uart = Uart::new(&mut file);
+		let bytes: Vec<u8> = "Hello, World!".bytes().collect();
+
+		for byte in &bytes {
+			println!("byte: {}, char: {}", byte, *byte as char);
+			uart.write(RegisterAddress::TransmitterHolding, *byte).unwrap();
+		}
+
+		let expected = String::from_utf8(bytes).unwrap();
+		let actual = std::fs::read_to_string(TEST_FILE_PATH).unwrap();
+		assert_eq!(expected, actual);
+
+		std::fs::remove_file(TEST_FILE_PATH).unwrap();
 	}
 }
