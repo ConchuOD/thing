@@ -18,7 +18,7 @@ fn u8s_to_insn(input: &[u8; 4]) -> u32
 }
 
 #[derive(Debug, Default)]
-struct ReservationSet
+pub struct ReservationSet
 {
 	pub address: usize,
 	pub size: usize,
@@ -26,16 +26,19 @@ struct ReservationSet
 	pub hart_id: usize,
 }
 
-#[derive(Default)]
-pub struct Platform
+pub struct Platform<'a, U>
+where
+	U: std::io::Write,
 {
 	pub hart: Hart,
 	memory: Memory,
-	uart: Uart,
-	reservation_sets: Vec<ReservationSet>,
+	uart: Uart<'a, U>,
+	pub(crate) reservation_sets: Vec<ReservationSet>,
 }
 
-impl Platform
+impl<'a, U> Platform<'a, U>
+where
+	U: std::io::Write,
 {
 	pub fn load_dtb(
 		&mut self, dtb: Vec<u8>, load_address: usize,
@@ -192,9 +195,21 @@ impl Platform
 
 		return self.write(address, value);
 	}
+
+	pub fn new(stdout: &'a mut U) -> Self
+	{
+		return Self {
+			hart: Hart::default(),
+			memory: Memory::default(),
+			uart: Uart::new(stdout),
+			reservation_sets: Vec::<ReservationSet>::default(),
+		};
+	}
 }
 
-impl Bus for Platform
+impl<'a, V> Bus for Platform<'a, V>
+where
+	V: std::io::Write,
 {
 	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
 	where

@@ -375,7 +375,10 @@ impl Insn
 		}
 	}
 
-	fn handle_int_reg_reg_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_int_reg_reg_insn<U>(
+		&mut self, platform: &Arc<RwLock<&mut Platform<U>>>,
+	) where
+		U: std::io::Write,
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
@@ -476,7 +479,10 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_int_reg_reg32_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_int_reg_reg32_insn<U>(
+		&mut self, platform: &Arc<RwLock<&mut Platform<U>>>,
+	) where
+		U: std::io::Write,
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
@@ -516,7 +522,10 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_int_reg_imm_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_int_reg_imm_insn<U>(
+		&mut self, platform: &Arc<RwLock<&mut Platform<U>>>,
+	) where
+		U: std::io::Write,
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
@@ -612,9 +621,10 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_int_reg_imm32_insn(
-		&mut self, platform: &Arc<RwLock<&mut Platform>>,
-	)
+	fn handle_int_reg_imm32_insn<U>(
+		&mut self, platform: &Arc<RwLock<&mut Platform<U>>>,
+	) where
+		U: std::io::Write,
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 		let mut src: u64 = hart.read_register(self.rs1 as usize);
@@ -678,7 +688,9 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_store_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_store_insn<U>(&mut self, platform: &Arc<RwLock<&mut Platform<U>>>)
+	where
+		U: std::io::Write,
 	{
 		// These are all store instructions of varied widths
 		// Stores add a sign-extended 12-bit immediate to rs1, forming
@@ -742,7 +754,9 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_load_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_load_insn<U>(&mut self, platform: &Arc<RwLock<&mut Platform<U>>>)
+	where
+		U: std::io::Write,
 	{
 		// These are all load instructions of varied widths.
 		// Loads add a sign-extended 12-bit immediate to rs1, forming
@@ -817,7 +831,9 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_csr_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_csr_insn<U>(&mut self, platform: &Arc<RwLock<&mut Platform<U>>>)
+	where
+		U: std::io::Write,
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
@@ -930,7 +946,9 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_jump_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_jump_insn<U>(&mut self, platform: &Arc<RwLock<&mut Platform<U>>>)
+	where
+		U: std::io::Write,
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
@@ -976,7 +994,10 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_branch_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_branch_insn<U>(
+		&mut self, platform: &Arc<RwLock<&mut Platform<U>>>,
+	) where
+		U: std::io::Write,
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 		let src1: u64 = hart.read_register(self.rs1 as usize);
@@ -1042,7 +1063,9 @@ impl Insn
 		}
 	}
 
-	fn handle_ui_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_ui_insn<U>(&mut self, platform: &Arc<RwLock<&mut Platform<U>>>)
+	where
+		U: std::io::Write,
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
@@ -1075,7 +1098,10 @@ impl Insn
 		}
 	}
 
-	fn handle_atomic_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_atomic_insn<U>(
+		&mut self, platform: &Arc<RwLock<&mut Platform<U>>>,
+	) where
+		U: std::io::Write,
 	{
 		let func5 = self.func7 & gen_mask!(6, 2, u32);
 		if func5 == FUNC7_LR {
@@ -1091,7 +1117,9 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_sc_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_sc_insn<U>(&mut self, platform: &Arc<RwLock<&mut Platform<U>>>)
+	where
+		U: std::io::Write,
 	{
 		self.name = String::from("sc");
 		let platform_bus = &mut platform.write().unwrap();
@@ -1127,7 +1155,9 @@ impl Insn
 		platform_bus.hart.write_register(self.rd as usize, 0);
 	}
 
-	fn handle_lr_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_lr_insn<U>(&mut self, platform: &Arc<RwLock<&mut Platform<U>>>)
+	where
+		U: std::io::Write,
 	{
 		self.name = String::from("lr");
 		let platform_bus = &mut platform.write().unwrap();
@@ -1152,7 +1182,10 @@ impl Insn
 		platform_bus.hart.write_register(self.rd as usize, val);
 	}
 
-	fn handle_atomic_rv64_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_atomic_rv64_insn<U>(
+		&mut self, platform: &Arc<RwLock<&mut Platform<U>>>,
+	) where
+		U: std::io::Write,
 	{
 		let platform_bus = &mut platform.write().unwrap();
 
@@ -1203,7 +1236,10 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn handle_atomic_rv32_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_atomic_rv32_insn<U>(
+		&mut self, platform: &Arc<RwLock<&mut Platform<U>>>,
+	) where
+		U: std::io::Write,
 	{
 		let platform_bus = &mut platform.write().unwrap();
 
@@ -1258,7 +1294,9 @@ impl Insn
 		debug_println!("Found {:}", self.name);
 	}
 
-	fn increment_pc(&self, platform: &Arc<RwLock<&mut Platform>>)
+	fn increment_pc<U>(&self, platform: &Arc<RwLock<&mut Platform<U>>>)
+	where
+		U: std::io::Write,
 	{
 		match self.opcode {
 			OPCODE_JAL | OPCODE_JALR | OPCODE_BRANCH => (),
@@ -1270,7 +1308,9 @@ impl Insn
 		}
 	}
 
-	pub fn handle(&mut self, platform: &mut Platform)
+	pub fn handle<U>(&mut self, platform: &mut Platform<U>)
+	where
+		U: std::io::Write,
 	{
 		let arc = Arc::new(std::sync::RwLock::new(platform));
 
@@ -1336,7 +1376,10 @@ impl Insn
 	}
 }
 
-fn dump_unimplemented_insn(insn: &Insn, platform: &Arc<RwLock<&mut Platform>>)
+fn dump_unimplemented_insn<U>(
+	insn: &Insn, platform: &Arc<RwLock<&mut Platform<U>>>,
+) where
+	U: std::io::Write,
 {
 	let hart = &mut (platform.write().unwrap()).hart;
 	debug_println!(

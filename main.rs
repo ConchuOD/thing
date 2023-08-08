@@ -6,7 +6,7 @@
 
 use clap::Parser;
 use platform::Platform;
-use std::fs;
+use std::{fs, io::Stdout};
 
 mod bitfield;
 mod bus;
@@ -64,7 +64,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 		dtb_load_address = args.dtb_load_address.unwrap();
 	}
 
-	let mut platform: Platform = Platform::default();
+	let mut stdout = std::io::stdout();
+	let mut platform = Platform::<Stdout>::new(&mut stdout);
 
 	let stripped_blob: Vec<u8> = kernel.split_off(0x1000);
 	platform.load_dtb(dtb, dtb_load_address)?;
