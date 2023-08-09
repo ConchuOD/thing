@@ -322,10 +322,104 @@ impl From<Error> for bus::Error
 #[cfg(test)]
 mod test
 {
-	use crate::bus::{self, Bus};
-	use crate::uart::{ReadOnlyRegister, UartRegisters};
+	use crate::bus::{Bus, Error, ErrorKind};
 
-	use super::{RegisterAddress, Uart, WriteOnlyRegister};
+	use super::{RegisterAddress, Uart};
+
+	#[test]
+	fn reading_from_address_0_returns_receiver_buffer_register_value()
+	{
+		let expected = 27u8;
+		let mut stdout = MockStdout::default();
+		let mut uart = Uart::new(&mut stdout);
+		uart.write(RegisterAddress::ReceiverBuffer, expected).unwrap();
+
+		let actual = uart.read(0).unwrap();
+
+		assert_eq!(expected, actual);
+	}
+
+	#[test]
+	fn writing_to_address_0_sets_transmitter_holding_register()
+	{
+		let mut mock_stdout = MockStdout::default();
+		let mut uart = Uart::new(&mut mock_stdout);
+		let expected = b'f';
+
+		uart.write(0usize, expected).unwrap();
+
+		let actual =
+			uart.read(RegisterAddress::TransmitterHolding.into()).unwrap();
+		assert_eq!(expected, actual);
+	}
+
+	#[test]
+	fn writing_receiver_buffer_register_also_sets_transmitter_holding_register()
+	{
+		let mut stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(&mut stdout);
+		let expected = b'a';
+
+		uart.write(RegisterAddress::ReceiverBuffer, expected).unwrap();
+		let actual = uart
+			.read::<u8>(RegisterAddress::TransmitterHolding.into())
+			.unwrap();
+
+		assert_eq!(expected, actual);
+	}
+
+	#[test]
+	fn writing_multiple_bytes_causes_bus_error()
+	{
+		let mut stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(&mut stdout);
+		let expected = Err(Error::new(
+			ErrorKind::Unimplemented,
+			"multi-byte writes are not implemented yet",
+		));
+
+		let res = uart
+			.write(RegisterAddress::TransmitterHolding, 0b00000001_00000001u16);
+
+		assert_eq!(res, expected);
+	}
+
+	#[test]
+	fn reading_multiple_bytes_causes_bus_error()
+	{
+		let mut stdout = MockStdout {
+			buf: Vec::new(),
+		};
+		let mut uart = Uart::<MockStdout>::new(&mut stdout);
+		let expected = Err(Error::new(
+			ErrorKind::Unimplemented,
+			"multi-byte reads are not implemented yet",
+		));
+
+		let res = uart.read::<u16>(RegisterAddress::TransmitterHolding.into());
+
+		assert_eq!(res, expected);
+	}
+
+	#[test]
+	fn writing_with_file_output_writes_to_file()
+	{
+		const TEST_FILE_PATH: &str = "test_output";
+		let mut file = std::fs::File::create(TEST_FILE_PATH).unwrap();
+		let mut uart = Uart::new(&mut file);
+		let bytes: Vec<u8> = "Hello, World!".bytes().collect();
+
+		for byte in &bytes {
+			println!("byte: {}, char: {}", byte, *byte as char);
+			uart.write(RegisterAddress::TransmitterHolding, *byte).unwrap();
+		}
+
+		let expected = String::from_utf8(bytes).unwrap();
+		let actual = std::fs::read_to_string(TEST_FILE_PATH).unwrap();
+		assert_eq!(expected, actual);
+
+		std::fs::remove_file(TEST_FILE_PATH).unwrap();
+	}
 
 	#[derive(Default)]
 	struct MockStdout
@@ -343,120 +437,5 @@ mod test
 		{
 			return self.buf.flush();
 		}
-	}
-	#[test]
-	fn reading_from_address_0_returns_rbr_value()
-	{
-		let v = 27u8;
-		let mut uart = Uart::<MockStdout> {
-			output: &mut MockStdout::default(),
-			registers: UartRegisters {
-				receiver_buffer: ReadOnlyRegister {
-					bits: v,
-				},
-				..Default::default()
-			},
-		};
-
-		let actual = uart.read(0).unwrap();
-
-		assert_eq!(v, actual);
-	}
-	#[test]
-	fn writing_to_address_0_writes_to_thr()
-	{
-		let mock_stdout = &mut MockStdout {
-			buf: Vec::new(),
-		};
-		let mut uart = Uart::new(mock_stdout);
-		let expected = WriteOnlyRegister {
-			bits: b'f',
-		};
-		uart.write(0usize, b'f').unwrap();
-		assert_eq!(uart.registers.transmitter_holding, expected);
-	}
-	#[test]
-	fn rbr_and_thr_are_the_same_register()
-	{
-		let mut stdout = MockStdout {
-			buf: Vec::new(),
-		};
-		let mut uart = Uart::<MockStdout>::new(&mut stdout);
-		let value = b'a';
-		uart.write(RegisterAddress::ReceiverBuffer, value).unwrap();
-		let res = uart
-			.read::<u8>(RegisterAddress::TransmitterHolding.into())
-			.unwrap();
-
-		assert_eq!(res, value);
-	}
-	#[test]
-	fn multi_byte_write_causes_error()
-	{
-		let mut stdout = MockStdout {
-			buf: Vec::new(),
-		};
-		let mut uart = Uart::<MockStdout>::new(&mut stdout);
-		let expected = Err(bus::Error::new(
-			bus::ErrorKind::Unimplemented,
-			"multi-byte writes are not implemented yet",
-		));
-
-		let res = uart
-			.write(RegisterAddress::TransmitterHolding, 0b00000001_00000001u16);
-
-		assert_eq!(res, expected);
-	}
-	#[test]
-	fn multi_byte_read_causes_error()
-	{
-		let mut stdout = MockStdout {
-			buf: Vec::new(),
-		};
-		let mut uart = Uart::<MockStdout>::new(&mut stdout);
-		let expected = Err(bus::Error::new(
-			bus::ErrorKind::Unimplemented,
-			"multi-byte reads are not implemented yet",
-		));
-
-		let res = uart.read::<u16>(RegisterAddress::TransmitterHolding.into());
-
-		assert_eq!(res, expected);
-	}
-
-	#[test]
-	fn can_plug_output()
-	{
-		let mut stdout = MockStdout::default();
-		let s = &mut stdout;
-		let mut uart = Uart::new(s);
-		let bytes: Vec<u8> = "Hello, World!".bytes().collect();
-
-		for byte in &bytes {
-			println!("byte: {}, char: {}", byte, *byte as char);
-			uart.write(RegisterAddress::TransmitterHolding, *byte).unwrap();
-		}
-
-		assert_eq!(bytes, stdout.buf);
-	}
-
-	#[test]
-	fn can_output_to_file()
-	{
-		const TEST_FILE_PATH: &str = "test_output";
-		let mut file = std::fs::File::create(TEST_FILE_PATH).unwrap();
-		let mut uart = Uart::new(&mut file);
-		let bytes: Vec<u8> = "Hello, World!".bytes().collect();
-
-		for byte in &bytes {
-			println!("byte: {}, char: {}", byte, *byte as char);
-			uart.write(RegisterAddress::TransmitterHolding, *byte).unwrap();
-		}
-
-		let expected = String::from_utf8(bytes).unwrap();
-		let actual = std::fs::read_to_string(TEST_FILE_PATH).unwrap();
-		assert_eq!(expected, actual);
-
-		std::fs::remove_file(TEST_FILE_PATH).unwrap();
 	}
 }
