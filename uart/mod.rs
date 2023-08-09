@@ -1,22 +1,5 @@
-use std::fmt::Display;
-
 use crate::{bus, lebytes::LeBytes};
-
-#[derive(Debug, PartialEq, Default)]
-struct UartRegisters
-{
-	receiver_buffer: ReadOnlyRegister,
-	transmitter_holding: WriteOnlyRegister,
-	interrupt_enable: Register,
-	interrupt_ident: ReadOnlyRegister,
-	line_control: Register,
-	modem_control: Register,
-	line_status: Register,
-	modem_status: Register,
-	scratch: Register,
-	divisor_latch_ls: Register,
-	divisor_latch_ms: Register,
-}
+use std::fmt::Display;
 
 #[derive(Debug, PartialEq)]
 struct Uart<T: std::io::Write>
@@ -24,7 +7,6 @@ struct Uart<T: std::io::Write>
 	registers: UartRegisters,
 	output: T,
 }
-
 impl<T: std::io::Write> Uart<T>
 {
 	fn new(output: T) -> Self
@@ -49,7 +31,6 @@ impl<T: std::io::Write> Uart<T>
 			Scratch => Ok(self.registers.scratch.read()),
 		};
 	}
-
 	fn write_at(
 		&mut self, address: RegisterAddress, value: u8,
 	) -> Result<(), Error>
@@ -83,7 +64,6 @@ impl<T: std::io::Write> Uart<T>
 		};
 	}
 }
-
 impl<V: std::io::Write> bus::Bus for Uart<V>
 {
 	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
@@ -106,7 +86,6 @@ impl<V: std::io::Write> bus::Bus for Uart<V>
 		return_bytes[0] = self.read_at(address)?;
 		return Ok(T::from_le_bytes(return_bytes));
 	}
-
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
 		T: crate::lebytes::LeBytes,
@@ -134,6 +113,110 @@ impl<V: std::io::Write> bus::Bus for Uart<V>
 	}
 }
 
+#[derive(Debug, PartialEq, Default)]
+struct UartRegisters
+{
+	receiver_buffer: ReadOnlyRegister,
+	transmitter_holding: WriteOnlyRegister,
+	interrupt_enable: Register,
+	interrupt_ident: ReadOnlyRegister,
+	line_control: Register,
+	modem_control: Register,
+	line_status: Register,
+	modem_status: Register,
+	scratch: Register,
+	divisor_latch_ls: Register,
+	divisor_latch_ms: Register,
+}
+
+#[derive(Debug, PartialEq)]
+struct ReadOnlyRegister
+{
+	bits: u8,
+}
+impl ReadOnlyRegister
+{
+	fn read(&self) -> u8
+	{
+		return self.bits;
+	}
+}
+impl Default for ReadOnlyRegister
+{
+	fn default() -> Self
+	{
+		return Self {
+			bits: 0,
+		};
+	}
+}
+
+#[derive(Debug, PartialEq)]
+struct WriteOnlyRegister
+{
+	bits: u8,
+}
+impl WriteOnlyRegister
+{
+	fn write(&mut self, v: u8)
+	{
+		self.bits = v;
+	}
+}
+impl Default for WriteOnlyRegister
+{
+	fn default() -> Self
+	{
+		return Self {
+			bits: 0,
+		};
+	}
+}
+
+#[derive(Debug, PartialEq)]
+struct Register
+{
+	bits: u8,
+}
+impl Register
+{
+	fn read(&self) -> u8
+	{
+		todo!("Register::read is not implemented yet!");
+	}
+
+	fn write(&self, _v: u8)
+	{
+		todo!("Register::write is not implemented yet!");
+	}
+}
+impl Default for Register
+{
+	fn default() -> Self
+	{
+		return Self {
+			bits: 0,
+		};
+	}
+}
+
+#[derive(Debug)]
+enum Error
+{
+	DisallowedRead,
+	DisallowedWrite,
+}
+impl From<Error> for bus::Error
+{
+	fn from(value: Error) -> Self
+	{
+		match value {
+			Error::DisallowedRead => todo!("bus error disallowed read"),
+			Error::DisallowedWrite => todo!("bus disallowed write"),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum RegisterAddress
 {
@@ -147,7 +230,6 @@ enum RegisterAddress
 	ModemStatus = 7,
 	Scratch = 8,
 }
-
 impl TryFrom<usize> for RegisterAddress
 {
 	type Error = AddressConvertError;
@@ -168,7 +250,14 @@ impl TryFrom<usize> for RegisterAddress
 		};
 	}
 }
-
+impl Display for RegisterAddress
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+	{
+		let v: usize = (*self).into();
+		return write!(f, "{}", v);
+	}
+}
 impl From<RegisterAddress> for u8
 {
 	fn from(val: RegisterAddress) -> Self
@@ -187,21 +276,11 @@ impl From<RegisterAddress> for u8
 		};
 	}
 }
-
 impl From<RegisterAddress> for usize
 {
 	fn from(value: RegisterAddress) -> usize
 	{
 		return u8::from(value) as usize;
-	}
-}
-
-impl Display for RegisterAddress
-{
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-	{
-		let v: usize = (*self).into();
-		return write!(f, "{}", v);
 	}
 }
 
@@ -214,101 +293,6 @@ impl From<AddressConvertError> for bus::Error
 	{
 		_ = value; // NOTE: nothing interesting in here for now.
 		return bus::Error::new(bus::ErrorKind::OutOfBounds, "todo, put a better error message here. needs more context. But uart::AddressConvertError implies that one tried to convert a numerical address into a uart address that does not exist");
-	}
-}
-
-#[derive(Debug, PartialEq)]
-struct Register
-{
-	bits: u8,
-}
-
-impl Register
-{
-	fn read(&self) -> u8
-	{
-		todo!("Register::read is not implemented yet!");
-	}
-
-	fn write(&self, _v: u8)
-	{
-		todo!("Register::write is not implemented yet!");
-	}
-}
-
-impl Default for Register
-{
-	fn default() -> Self
-	{
-		return Self {
-			bits: 0,
-		};
-	}
-}
-
-#[derive(Debug, PartialEq)]
-struct ReadOnlyRegister
-{
-	bits: u8,
-}
-
-impl ReadOnlyRegister
-{
-	fn read(&self) -> u8
-	{
-		return self.bits;
-	}
-}
-
-impl Default for ReadOnlyRegister
-{
-	fn default() -> Self
-	{
-		return Self {
-			bits: 0,
-		};
-	}
-}
-
-#[derive(Debug, PartialEq)]
-struct WriteOnlyRegister
-{
-	bits: u8,
-}
-
-impl WriteOnlyRegister
-{
-	fn write(&mut self, v: u8)
-	{
-		self.bits = v;
-	}
-}
-
-impl Default for WriteOnlyRegister
-{
-	fn default() -> Self
-	{
-		return Self {
-			bits: 0,
-		};
-	}
-}
-
-#[derive(Debug)]
-enum Error
-{
-	DisallowedRead,
-	DisallowedWrite,
-}
-
-impl From<Error> for bus::Error
-{
-	fn from(value: Error) -> Self
-	{
-		match value {
-			Error::DisallowedRead => todo!("bus error disallowed read"),
-			Error::DisallowedWrite => todo!("bus disallowed write"),
-		}
 	}
 }
 
@@ -419,6 +403,7 @@ mod test
 	{
 		buf: Vec<u8>,
 	}
+
 	impl std::io::Write for MockStdout
 	{
 		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize>
