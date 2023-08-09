@@ -90,9 +90,6 @@ where
 
 		loop {
 			let pc = self.hart.pc as usize - self.memory.start;
-			if self.hart.pc == 0x8011a0f0 {
-				todo!("Busting spinlocks!!!");
-			}
 			let insn_bits: &[u8] = &self.memory.memory[pc..(pc + 4)];
 			let insn: u32 = u8s_to_insn(insn_bits.try_into()?);
 			let mut insn: Insn = Insn::from(insn);
