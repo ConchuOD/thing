@@ -19,17 +19,13 @@ struct UartRegisters
 }
 
 #[derive(Debug, PartialEq)]
-struct Uart<T>
-where
-	T: std::io::Write,
+struct Uart<T: std::io::Write>
 {
 	registers: UartRegisters,
 	output: T,
 }
 
-impl<T> Uart<T>
-where
-	T: std::io::Write,
+impl<T: std::io::Write> Uart<T>
 {
 	fn new(output: T) -> Self
 	{
@@ -88,9 +84,7 @@ where
 	}
 }
 
-impl<V> bus::Bus for Uart<V>
-where
-	V: std::io::Write,
+impl<V: std::io::Write> bus::Bus for Uart<V>
 {
 	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
 	where
