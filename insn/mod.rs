@@ -188,6 +188,8 @@ const FUNC7_SHIFT: u32 = IMM11_5_STYPE_SHIFT;
 const FUNC7_WIDTH: u32 = IMM11_5_STYPE_WIDTH;
 const FUNC7_MASK: u32 = IMM11_5_STYPE_MASK;
 
+const FUNC7_MULDIV: u32 = 0b0000001;
+
 const FUNC7_SLLI: u32 = 0b0000000;
 const FUNC7_SRLI: u32 = 0b0000000;
 const FUNC7_SRAI: u32 = 0b0100000;
@@ -389,6 +391,10 @@ impl Insn
 		// rs2. It's the bottom 5 for rv32.
 		let shift: u32 = (rs2 & gen_mask!(5, 0, u64)) as u32;
 
+		if self.func7 == FUNC7_MULDIV {
+			todo!("M extension is not implemented yet!");
+		}
+
 		match self.func3 {
 			FUNC3_ADD => {
 				if self.func7 == FUNC7_ADD {
@@ -494,6 +500,10 @@ impl Insn
 		// shifts encode the "shamt" in the bottom 6 bits of rs2
 		// field. It's the bottom 5 for rv32.
 		let shift: u32 = (rs2 as u32) & gen_mask!(5, 0, u32);
+
+		if self.func7 == FUNC7_MULDIV {
+			todo!("M extension is not implemented yet!");
+		}
 
 		match self.func3 {
 			FUNC3_ADD => {
