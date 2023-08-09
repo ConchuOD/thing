@@ -154,6 +154,15 @@ const FUNC3_SLLW: u32 = 0b001;
 const FUNC3_SRLW: u32 = 0b101;
 const FUNC3_SRAW: u32 = 0b101;
 
+const FUNC3_MUL: u32 = 0b000;
+const FUNC3_MULH: u32 = 0b001;
+const FUNC3_MULHSU: u32 = 0b010;
+const FUNC3_MULHU: u32 = 0b011;
+const FUNC3_DIV: u32 = 0b100;
+const FUNC3_DIVU: u32 = 0b101;
+const FUNC3_REM: u32 = 0b110;
+const FUNC3_REMU: u32 = 0b111;
+
 const FUNC3_SB: u32 = 0b000;
 const FUNC3_SH: u32 = 0b001;
 const FUNC3_SW: u32 = 0b010;
@@ -389,94 +398,179 @@ impl Insn
 		let shift: u32 = (rs2 & gen_mask!(5, 0, u64)) as u32;
 
 		if self.func7 == FUNC7_MULDIV {
-			todo!("M extension is not implemented yet!");
-		}
-
-		match self.func3 {
-			FUNC3_ADD => {
-				if self.func7 == FUNC7_ADD {
-					self.name = String::from("add");
-					// ADD adds the value in rs1 to rs2 and
-					// stores the result in rd
-					// overflows are ignored, the lower XLEN
-					// bits get written
-					let tmp: u64 = rs1.wrapping_add(rs2);
+			match self.func3 {
+				FUNC3_MUL => {
+					self.name = String::from("mul");
+					// MUL performs an XLEN-bit * XLEN-bit
+					// multiplication of rs1 by rs2 and
+					// places the lower XLEN bits in the
+					// destination register.
+					let tmp: i128 = rs1 as i128 * rs2 as i128;
+					let tmp: u64 = tmp as u128 as u64;
 					hart.write_register(self.rd as usize, tmp);
-				} else {
-					self.name = String::from("sub");
-					// SUB subtracts the value in rs2 from
-					// rs1 and stores the result in rd
-					// overflows are ignored, the lower XLEN
-					// bits get written
-					let tmp: u64 = rs1.wrapping_sub(rs2);
+				},
+
+				FUNC3_MULH => {
+					self.name = String::from("mulh");
+					// MUL performs an XLEN-bit * XLEN-bit
+					// multiplication of rs1 by rs2 and
+					// places the upper XLEN bits in the
+					// destination register.
+					let tmp: i128 = rs1 as i128 * rs2 as i128;
+					let tmp: u64 = (tmp as u128 >> 64) as u64;
 					hart.write_register(self.rd as usize, tmp);
-				}
-			},
+				},
 
-			FUNC3_AND => {
-				self.name = String::from("and");
-				let tmp: u64 = rs1 & rs2;
-				hart.write_register(self.rd as usize, tmp);
-			},
+				FUNC3_MULHU => {
+					self.name = String::from("mulhu");
+					// MUL performs an XLEN-bit * XLEN-bit
+					// multiplication of rs1 by rs2 and
+					// places the lower XLEN bits in the
+					// destination register.
+					let tmp: u128 = rs1 as u128 * rs2 as u128;
+					let tmp: u64 = (tmp >> 64) as u64;
+					hart.write_register(self.rd as usize, tmp);
+				},
 
-			FUNC3_OR => {
-				self.name = String::from("or");
-				let tmp: u64 = rs1 | rs2;
-				hart.write_register(self.rd as usize, tmp);
-			},
+				FUNC3_MULHSU => {
+					self.name = String::from("mulhsu");
+					// MUL performs an XLEN-bit * XLEN-bit
+					// multiplication of rs1 by rs2 and
+					// places the upper XLEN bits in the
+					// destination register.
+					let tmp: i128 = rs1 as i128 * rs2 as u128 as i128;
+					let tmp: u64 = (tmp as u128 >> 64) as u64;
+					hart.write_register(self.rd as usize, tmp);
+				},
 
-			FUNC3_XOR => {
-				self.name = String::from("xor");
-				let tmp: u64 = rs1 ^ rs2;
-				hart.write_register(self.rd as usize, tmp);
-			},
+				FUNC3_DIV => {
+					self.name = String::from("div");
+					// div performs an xlen bits by xlen
+					// bits signed integer division of rs1
+					// by rs2 rounding towards zero
+					let tmp: i64 = rs1 as i64 / rs2 as i64;
+					hart.write_register(self.rd as usize, tmp as u64);
+				},
 
-			FUNC3_SLT => {
-				self.name = String::from("slt");
+				FUNC3_DIVU => {
+					self.name = String::from("divu");
+					// div performs an xlen bits by xlen
+					// bits unsigned integer division of rs1
+					// by rs2 rounding towards zero
+					let tmp: u64 = rs1 / rs2;
+					hart.write_register(self.rd as usize, tmp);
+				},
 
-				if (rs1 as i64) < (rs2 as i64) {
-					hart.write_register(self.rd as usize, 1);
-				} else {
-					hart.write_register(self.rd as usize, 0);
-				}
-			},
+				FUNC3_REM => {
+					self.name = String::from("rem");
+					// div performs an xlen bits by xlen
+					// bits signed integer division of rs1
+					// by rs2 rounding towards zero, and
+					// returns the remainder in rd
+					let tmp: i64 = rs1 as i64 % rs2 as i64;
+					hart.write_register(self.rd as usize, tmp as u64);
+				},
 
-			FUNC3_SLTU => {
-				if self.rs1 == 0 {
-					self.name = String::from("snez");
-				} else {
-					self.name = String::from("sltu");
-				}
+				FUNC3_REMU => {
+					self.name = String::from("remu");
+					// div performs an xlen bits by xlen
+					// bits unsigned integer division of rs1
+					// by rs2 rounding towards zero, and
+					// returns the remainder in rd
+					let tmp: u64 = rs1 % rs2;
+					hart.write_register(self.rd as usize, tmp);
+				},
 
-				if rs1 < rs2 {
-					hart.write_register(self.rd as usize, 1);
-				} else {
-					hart.write_register(self.rd as usize, 0);
-				}
-			},
+				_ => todo!("muldiv: {:}", self.func3),
+			}
+		} else {
+			match self.func3 {
+				FUNC3_ADD => {
+					if self.func7 == FUNC7_ADD {
+						self.name = String::from("add");
+						// ADD adds the value in rs1 to rs2 and
+						// stores the result in rd
+						// overflows are ignored, the lower XLEN
+						// bits get written
+						let tmp: u64 = rs1.wrapping_add(rs2);
+						hart.write_register(self.rd as usize, tmp);
+					} else {
+						self.name = String::from("sub");
+						// SUB subtracts the value in rs2 from
+						// rs1 and stores the result in rd
+						// overflows are ignored, the lower XLEN
+						// bits get written
+						let tmp: u64 = rs1.wrapping_sub(rs2);
+						hart.write_register(self.rd as usize, tmp);
+					}
+				},
 
-			FUNC3_SLL => {
-				self.name = String::from("sll");
-				let tmp = rs1.wrapping_shl(shift);
-				hart.write_register(self.rd as usize, tmp);
-			},
+				FUNC3_AND => {
+					self.name = String::from("and");
+					let tmp: u64 = rs1 & rs2;
+					hart.write_register(self.rd as usize, tmp);
+				},
 
-			FUNC3_SRL => {
-				// if bit 6 is set, shift the sign bit down
-				let is_sra = (self.func7 & gen_mask!(6, 6, u32)) == FUNC7_SRA;
-				let tmp: u64;
-				if !is_sra {
-					self.name = String::from("srl");
-					tmp = rs1.wrapping_shr(shift);
-				} else {
-					self.name = String::from("sra");
-					tmp = (rs1 as i64).wrapping_shr(shift) as u64;
-				}
+				FUNC3_OR => {
+					self.name = String::from("or");
+					let tmp: u64 = rs1 | rs2;
+					hart.write_register(self.rd as usize, tmp);
+				},
 
-				hart.write_register(self.rd as usize, tmp);
-			},
+				FUNC3_XOR => {
+					self.name = String::from("xor");
+					let tmp: u64 = rs1 ^ rs2;
+					hart.write_register(self.rd as usize, tmp);
+				},
 
-			_ => todo!("reg reg: {:}", self.func3),
+				FUNC3_SLT => {
+					self.name = String::from("slt");
+
+					if (rs1 as i64) < (rs2 as i64) {
+						hart.write_register(self.rd as usize, 1);
+					} else {
+						hart.write_register(self.rd as usize, 0);
+					}
+				},
+
+				FUNC3_SLTU => {
+					if self.rs1 == 0 {
+						self.name = String::from("snez");
+					} else {
+						self.name = String::from("sltu");
+					}
+
+					if rs1 < rs2 {
+						hart.write_register(self.rd as usize, 1);
+					} else {
+						hart.write_register(self.rd as usize, 0);
+					}
+				},
+
+				FUNC3_SLL => {
+					self.name = String::from("sll");
+					let tmp = rs1.wrapping_shl(shift);
+					hart.write_register(self.rd as usize, tmp);
+				},
+
+				FUNC3_SRL => {
+					// if bit 6 is set, shift the sign bit down
+					let is_sra =
+						(self.func7 & gen_mask!(6, 6, u32)) == FUNC7_SRA;
+					let tmp: u64;
+					if !is_sra {
+						self.name = String::from("srl");
+						tmp = rs1.wrapping_shr(shift);
+					} else {
+						self.name = String::from("sra");
+						tmp = (rs1 as i64).wrapping_shr(shift) as u64;
+					}
+
+					hart.write_register(self.rd as usize, tmp);
+				},
+
+				_ => todo!("reg reg: {:}", self.func3),
+			}
 		}
 
 		debug_println!("Found {:}", self.name);
@@ -496,7 +590,7 @@ impl Insn
 		let shift: u32 = (rs2 as u32) & gen_mask!(5, 0, u32);
 
 		if self.func7 == FUNC7_MULDIV {
-			todo!("M extension is not implemented yet!");
+			todo!("32-bit M extension stuff is not implemented yet!");
 		}
 
 		match self.func3 {
