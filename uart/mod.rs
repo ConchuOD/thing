@@ -1,5 +1,4 @@
 use std::fmt::Display;
-use std::io::Write;
 
 use crate::{bus, lebytes::LeBytes};
 
@@ -20,19 +19,19 @@ struct UartRegisters
 }
 
 #[derive(Debug, PartialEq)]
-struct Uart<'a, T>
+struct Uart<T>
 where
-	&'a mut T: std::io::Write,
+	T: std::io::Write,
 {
 	registers: UartRegisters,
-	output: &'a mut T,
+	output: T,
 }
 
-impl<'a, T> Uart<'a, T>
+impl<T> Uart<T>
 where
-	&'a mut T: std::io::Write,
+	T: std::io::Write,
 {
-	fn new(output: &'a mut T) -> Self
+	fn new(output: T) -> Self
 	{
 		return Self {
 			registers: UartRegisters::default(),
@@ -89,9 +88,9 @@ where
 	}
 }
 
-impl<'a, V> bus::Bus for Uart<'a, V>
+impl<V> bus::Bus for Uart<V>
 where
-	&'a mut V: std::io::Write,
+	V: std::io::Write,
 {
 	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
 	where
@@ -356,8 +355,8 @@ mod test
 	#[test]
 	fn writing_receiver_buffer_register_also_sets_transmitter_holding_register()
 	{
-		let mut stdout = MockStdout::default();
-		let mut uart = Uart::<MockStdout>::new(&mut stdout);
+		let stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(stdout);
 		let expected = b'a';
 
 		uart.write(RegisterAddress::ReceiverBuffer, expected).unwrap();
@@ -371,8 +370,8 @@ mod test
 	#[test]
 	fn writing_multiple_bytes_causes_bus_error()
 	{
-		let mut stdout = MockStdout::default();
-		let mut uart = Uart::<MockStdout>::new(&mut stdout);
+		let stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(stdout);
 		let expected = Err(Error::new(
 			ErrorKind::Unimplemented,
 			"multi-byte writes are not implemented yet",
@@ -387,10 +386,10 @@ mod test
 	#[test]
 	fn reading_multiple_bytes_causes_bus_error()
 	{
-		let mut stdout = MockStdout {
+		let stdout = MockStdout {
 			buf: Vec::new(),
 		};
-		let mut uart = Uart::<MockStdout>::new(&mut stdout);
+		let mut uart = Uart::<MockStdout>::new(stdout);
 		let expected = Err(Error::new(
 			ErrorKind::Unimplemented,
 			"multi-byte reads are not implemented yet",
