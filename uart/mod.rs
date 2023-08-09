@@ -1,38 +1,15 @@
-use std::fmt::Display;
-use std::io::Write;
-
 use crate::{bus, lebytes::LeBytes};
-
-#[derive(Debug, PartialEq, Default)]
-struct UartRegisters
-{
-	receiver_buffer: ReadOnlyRegister,
-	transmitter_holding: WriteOnlyRegister,
-	interrupt_enable: Register,
-	interrupt_ident: ReadOnlyRegister,
-	line_control: Register,
-	modem_control: Register,
-	line_status: Register,
-	modem_status: Register,
-	scratch: Register,
-	divisor_latch_ls: Register,
-	divisor_latch_ms: Register,
-}
+use std::fmt::Display;
 
 #[derive(Debug, PartialEq)]
-pub struct Uart<'a, T>
-where
-	&'a mut T: std::io::Write,
+pub struct Uart<T: std::io::Write>
 {
 	registers: UartRegisters,
-	output: &'a mut T,
+	output: T,
 }
-
-impl<'a, T> Uart<'a, T>
-where
-	&'a mut T: std::io::Write,
+impl<T: std::io::Write> Uart<T>
 {
-	pub fn new(output: &'a mut T) -> Self
+	pub fn new(output: T) -> Self
 	{
 		return Self {
 			registers: UartRegisters::default(),
@@ -54,7 +31,6 @@ where
 			Scratch => Ok(self.registers.scratch.read()),
 		};
 	}
-
 	fn write_at(
 		&mut self, address: RegisterAddress, value: u8,
 	) -> Result<(), Error>
@@ -88,10 +64,7 @@ where
 		};
 	}
 }
-
-impl<'a, V> bus::Bus for Uart<'a, V>
-where
-	&'a mut V: std::io::Write,
+impl<V: std::io::Write> bus::Bus for Uart<V>
 {
 	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
 	where
@@ -104,6 +77,7 @@ where
 				"multi-byte reads are not implemented yet",
 			));
 		}
+
 		let mut address = RegisterAddress::try_from(address)?;
 		if address == RegisterAddress::TransmitterHolding {
 			address = RegisterAddress::ReceiverBuffer;
@@ -112,7 +86,6 @@ where
 		return_bytes[0] = self.read_at(address)?;
 		return Ok(T::from_le_bytes(return_bytes));
 	}
-
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
 		T: crate::lebytes::LeBytes,
@@ -140,6 +113,110 @@ where
 	}
 }
 
+#[derive(Debug, PartialEq, Default)]
+struct UartRegisters
+{
+	receiver_buffer: ReadOnlyRegister,
+	transmitter_holding: WriteOnlyRegister,
+	interrupt_enable: Register,
+	interrupt_ident: ReadOnlyRegister,
+	line_control: Register,
+	modem_control: Register,
+	line_status: Register,
+	modem_status: Register,
+	scratch: Register,
+	divisor_latch_ls: Register,
+	divisor_latch_ms: Register,
+}
+
+#[derive(Debug, PartialEq)]
+struct ReadOnlyRegister
+{
+	bits: u8,
+}
+impl ReadOnlyRegister
+{
+	fn read(&self) -> u8
+	{
+		return self.bits;
+	}
+}
+impl Default for ReadOnlyRegister
+{
+	fn default() -> Self
+	{
+		return Self {
+			bits: 0,
+		};
+	}
+}
+
+#[derive(Debug, PartialEq)]
+struct WriteOnlyRegister
+{
+	bits: u8,
+}
+impl WriteOnlyRegister
+{
+	fn write(&mut self, v: u8)
+	{
+		self.bits = v;
+	}
+}
+impl Default for WriteOnlyRegister
+{
+	fn default() -> Self
+	{
+		return Self {
+			bits: 0,
+		};
+	}
+}
+
+#[derive(Debug, PartialEq)]
+struct Register
+{
+	bits: u8,
+}
+impl Register
+{
+	fn read(&self) -> u8
+	{
+		todo!("Register::read is not implemented yet!");
+	}
+
+	fn write(&self, _v: u8)
+	{
+		todo!("Register::write is not implemented yet!");
+	}
+}
+impl Default for Register
+{
+	fn default() -> Self
+	{
+		return Self {
+			bits: 0,
+		};
+	}
+}
+
+#[derive(Debug)]
+enum Error
+{
+	DisallowedRead,
+	DisallowedWrite,
+}
+impl From<Error> for bus::Error
+{
+	fn from(value: Error) -> Self
+	{
+		match value {
+			Error::DisallowedRead => todo!("bus error disallowed read"),
+			Error::DisallowedWrite => todo!("bus disallowed write"),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum RegisterAddress
 {
@@ -153,7 +230,6 @@ enum RegisterAddress
 	ModemStatus = 7,
 	Scratch = 8,
 }
-
 impl TryFrom<usize> for RegisterAddress
 {
 	type Error = AddressConvertError;
@@ -174,7 +250,14 @@ impl TryFrom<usize> for RegisterAddress
 		};
 	}
 }
-
+impl Display for RegisterAddress
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+	{
+		let v: usize = (*self).into();
+		return write!(f, "{}", v);
+	}
+}
 impl From<RegisterAddress> for u8
 {
 	fn from(val: RegisterAddress) -> Self
@@ -193,21 +276,11 @@ impl From<RegisterAddress> for u8
 		};
 	}
 }
-
 impl From<RegisterAddress> for usize
 {
 	fn from(value: RegisterAddress) -> usize
 	{
 		return u8::from(value) as usize;
-	}
-}
-
-impl Display for RegisterAddress
-{
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-	{
-		let v: usize = (*self).into();
-		return write!(f, "{}", v);
 	}
 }
 
@@ -223,181 +296,62 @@ impl From<AddressConvertError> for bus::Error
 	}
 }
 
-#[derive(Debug, PartialEq)]
-struct Register
-{
-	bits: u8,
-}
-
-impl Register
-{
-	fn read(&self) -> u8
-	{
-		todo!("Register::read is not implemented yet!");
-	}
-
-	fn write(&self, _v: u8)
-	{
-		todo!("Register::write is not implemented yet!");
-	}
-}
-
-impl Default for Register
-{
-	fn default() -> Self
-	{
-		return Self {
-			bits: 0,
-		};
-	}
-}
-
-#[derive(Debug, PartialEq)]
-struct ReadOnlyRegister
-{
-	bits: u8,
-}
-
-impl ReadOnlyRegister
-{
-	fn read(&self) -> u8
-	{
-		return self.bits;
-	}
-}
-
-impl Default for ReadOnlyRegister
-{
-	fn default() -> Self
-	{
-		return Self {
-			bits: 0,
-		};
-	}
-}
-
-#[derive(Debug, PartialEq)]
-struct WriteOnlyRegister
-{
-	bits: u8,
-}
-
-impl WriteOnlyRegister
-{
-	fn write(&mut self, v: u8)
-	{
-		self.bits = v;
-	}
-}
-
-impl Default for WriteOnlyRegister
-{
-	fn default() -> Self
-	{
-		return Self {
-			bits: 0,
-		};
-	}
-}
-
-#[derive(Debug)]
-enum Error
-{
-	DisallowedRead,
-	DisallowedWrite,
-}
-
-impl From<Error> for bus::Error
-{
-	fn from(value: Error) -> Self
-	{
-		match value {
-			Error::DisallowedRead => todo!("bus error disallowed read"),
-			Error::DisallowedWrite => todo!("bus disallowed write"),
-		}
-	}
-}
-
 #[cfg(test)]
 mod test
 {
-	use crate::bus::{self, Bus};
-	use crate::uart::{ReadOnlyRegister, UartRegisters};
+	use crate::bus::{Bus, Error, ErrorKind};
 
-	use super::{RegisterAddress, Uart, WriteOnlyRegister};
+	use super::{RegisterAddress, Uart};
 
-	#[derive(Default)]
-	struct MockStdout
-	{
-		buf: Vec<u8>,
-	}
-	impl std::io::Write for MockStdout
-	{
-		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize>
-		{
-			return self.buf.write(buf);
-		}
-
-		fn flush(&mut self) -> std::io::Result<()>
-		{
-			return self.buf.flush();
-		}
-	}
 	#[test]
-	fn reading_from_address_0_returns_rbr_value()
+	fn reading_from_address_0_returns_receiver_buffer_register_value()
 	{
-		let v = 27u8;
-		let mut uart = Uart::<MockStdout> {
-			output: &mut MockStdout::default(),
-			registers: UartRegisters {
-				receiver_buffer: ReadOnlyRegister {
-					bits: v,
-				},
-				..Default::default()
-			},
-		};
+		let expected = 27u8;
+		let mut stdout = MockStdout::default();
+		let mut uart = Uart::new(&mut stdout);
+		uart.write(RegisterAddress::ReceiverBuffer, expected).unwrap();
 
 		let actual = uart.read(0).unwrap();
 
-		assert_eq!(v, actual);
+		assert_eq!(expected, actual);
 	}
+
 	#[test]
-	fn writing_to_address_0_writes_to_thr()
+	fn writing_to_address_0_sets_transmitter_holding_register()
 	{
-		let mock_stdout = &mut MockStdout {
-			buf: Vec::new(),
-		};
-		let mut uart = Uart::new(mock_stdout);
-		let expected = WriteOnlyRegister {
-			bits: b'f',
-		};
-		uart.write(0usize, b'f').unwrap();
-		assert_eq!(uart.registers.transmitter_holding, expected);
+		let mut mock_stdout = MockStdout::default();
+		let mut uart = Uart::new(&mut mock_stdout);
+		let expected = b'f';
+
+		uart.write(0usize, expected).unwrap();
+
+		let actual =
+			uart.read(RegisterAddress::TransmitterHolding.into()).unwrap();
+		assert_eq!(expected, actual);
 	}
+
 	#[test]
-	fn rbr_and_thr_are_the_same_register()
+	fn writing_receiver_buffer_register_also_sets_transmitter_holding_register()
 	{
-		let mut stdout = MockStdout {
-			buf: Vec::new(),
-		};
-		let mut uart = Uart::<MockStdout>::new(&mut stdout);
-		let value = b'a';
-		uart.write(RegisterAddress::ReceiverBuffer, value).unwrap();
-		let res = uart
+		let stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(stdout);
+		let expected = b'a';
+
+		uart.write(RegisterAddress::ReceiverBuffer, expected).unwrap();
+		let actual = uart
 			.read::<u8>(RegisterAddress::TransmitterHolding.into())
 			.unwrap();
 
-		assert_eq!(res, value);
+		assert_eq!(expected, actual);
 	}
+
 	#[test]
-	fn multi_byte_write_causes_error()
+	fn writing_multiple_bytes_causes_bus_error()
 	{
-		let mut stdout = MockStdout {
-			buf: Vec::new(),
-		};
-		let mut uart = Uart::<MockStdout>::new(&mut stdout);
-		let expected = Err(bus::Error::new(
-			bus::ErrorKind::Unimplemented,
+		let stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(stdout);
+		let expected = Err(Error::new(
+			ErrorKind::Unimplemented,
 			"multi-byte writes are not implemented yet",
 		));
 
@@ -406,15 +360,16 @@ mod test
 
 		assert_eq!(res, expected);
 	}
+
 	#[test]
-	fn multi_byte_read_causes_error()
+	fn reading_multiple_bytes_causes_bus_error()
 	{
-		let mut stdout = MockStdout {
+		let stdout = MockStdout {
 			buf: Vec::new(),
 		};
-		let mut uart = Uart::<MockStdout>::new(&mut stdout);
-		let expected = Err(bus::Error::new(
-			bus::ErrorKind::Unimplemented,
+		let mut uart = Uart::<MockStdout>::new(stdout);
+		let expected = Err(Error::new(
+			ErrorKind::Unimplemented,
 			"multi-byte reads are not implemented yet",
 		));
 
@@ -424,23 +379,7 @@ mod test
 	}
 
 	#[test]
-	fn can_plug_output()
-	{
-		let mut stdout = MockStdout::default();
-		let s = &mut stdout;
-		let mut uart = Uart::new(s);
-		let bytes: Vec<u8> = "Hello, World!".bytes().collect();
-
-		for byte in &bytes {
-			println!("byte: {}, char: {}", byte, *byte as char);
-			uart.write(RegisterAddress::TransmitterHolding, *byte).unwrap();
-		}
-
-		assert_eq!(bytes, stdout.buf);
-	}
-
-	#[test]
-	fn can_output_to_file()
+	fn writing_with_file_output_writes_to_file()
 	{
 		const TEST_FILE_PATH: &str = "test_output";
 		let mut file = std::fs::File::create(TEST_FILE_PATH).unwrap();
@@ -457,5 +396,24 @@ mod test
 		assert_eq!(expected, actual);
 
 		std::fs::remove_file(TEST_FILE_PATH).unwrap();
+	}
+
+	#[derive(Default)]
+	struct MockStdout
+	{
+		buf: Vec<u8>,
+	}
+
+	impl std::io::Write for MockStdout
+	{
+		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize>
+		{
+			return self.buf.write(buf);
+		}
+
+		fn flush(&mut self) -> std::io::Result<()>
+		{
+			return self.buf.flush();
+		}
 	}
 }

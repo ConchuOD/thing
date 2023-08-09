@@ -26,17 +26,15 @@ pub struct ReservationSet
 	pub hart_id: usize,
 }
 
-pub struct Platform<'a, U>
-where
-	U: std::io::Write,
+pub struct Platform<U: std::io::Write>
 {
 	pub hart: Hart,
 	memory: Memory,
-	uart: Uart<'a, U>,
+	uart: Uart<U>,
 	pub(crate) reservation_sets: Vec<ReservationSet>,
 }
 
-impl<'a, U> Platform<'a, U>
+impl<U> Platform<U>
 where
 	U: std::io::Write,
 {
@@ -196,7 +194,7 @@ where
 		return self.write(address, value);
 	}
 
-	pub fn new(stdout: &'a mut U) -> Self
+	pub fn new(stdout: U) -> Self
 	{
 		return Self {
 			hart: Hart::default(),
@@ -207,7 +205,7 @@ where
 	}
 }
 
-impl<'a, V> Bus for Platform<'a, V>
+impl<V> Bus for Platform<V>
 where
 	V: std::io::Write,
 {
