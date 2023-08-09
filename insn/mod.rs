@@ -262,7 +262,7 @@ impl Insn
 			},
 
 			OPCODE_LOAD => {
-				self.insn_type = InsnType::S;
+				self.insn_type = InsnType::I;
 			},
 
 			OPCODE_STORE => {
