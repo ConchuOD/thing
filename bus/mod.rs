@@ -40,7 +40,7 @@ impl fmt::Display for Error
 
 pub trait Bus
 {
-	fn read<T>(&mut self, address: usize) -> Result<T, Error>
+	fn read<T>(&self, address: usize) -> Result<T, Error>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:;
