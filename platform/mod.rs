@@ -191,7 +191,7 @@ impl Platform
 
 impl Bus for Platform
 {
-	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
+	fn read<T>(&self, address: usize) -> Result<T, bus::Error>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,
@@ -265,7 +265,7 @@ impl Default for Memory
 
 impl Bus for Memory
 {
-	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
+	fn read<T>(&self, address: usize) -> Result<T, bus::Error>
 	where
 		T: LeBytes,
 		[(); <T as LeBytes>::SIZE]:,

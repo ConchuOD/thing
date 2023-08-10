@@ -1,4 +1,7 @@
-use crate::{bus, lebytes::LeBytes};
+use crate::{
+	bus::{self, Bus},
+	lebytes::LeBytes,
+};
 use std::fmt::Display;
 
 #[derive(Debug, PartialEq)]
@@ -63,10 +66,82 @@ impl<T: std::io::Write> Uart<T>
 			},
 		};
 	}
+
+	fn word_length(&self) -> WordLength
+	{
+		let character_length_control_bits = self
+			.read::<u8>(RegisterAddress::LineControl.into())
+			.unwrap() & 0b11;
+		return WordLength::try_from(character_length_control_bits).expect("This error can never happen because of the masking in the previous line. The mask ensures 2 bit values. Thus, due to the implementation of TryFrom for WordLength, this can never fail.");
+	}
+
+	fn stop_bit_count(&self) -> StopBitCount
+	{
+		let control_bits =
+			self.read::<u8>(RegisterAddress::LineControl.into()).unwrap();
+
+		let stop_bit_control_bit = control_bits & 0b100;
+		let x: StopBitMask = stop_bit_control_bit.try_into().unwrap();
+
+		return match x {
+			StopBitMask::Unset => StopBitCount::One,
+			StopBitMask::Set => {
+				let word_length_bits = control_bits & 0b11;
+				let word_length = WordLength::try_from(word_length_bits).expect("This error can never happen because of the masking in the previous line. The mask ensures 2 bit values. Thus, due to the implementation of TryFrom for WordLength, this can never fail.");
+				StopBitCount::from(word_length)
+			},
+		};
+	}
 }
+
+#[derive(Debug, PartialEq)]
+enum WordLength
+{
+	FiveBits,
+	SixBits,
+	SevenBits,
+	EightBits,
+}
+
+impl TryFrom<u8> for WordLength
+{
+	type Error = Error;
+	fn try_from(value: u8) -> Result<Self, Self::Error>
+	{
+		return match value {
+			0 => Ok(Self::FiveBits),
+			1 => Ok(Self::SixBits),
+			2 => Ok(Self::SevenBits),
+			3 => Ok(Self::EightBits),
+			_ => Err(Error::InvalidCharacterLength),
+		};
+	}
+}
+
+#[derive(Debug, PartialEq)]
+enum StopBitCount
+{
+	One,
+	OneAndAHalf,
+	Two,
+}
+
+impl From<WordLength> for StopBitCount
+{
+	fn from(word_length: WordLength) -> Self
+	{
+		return match word_length {
+			WordLength::FiveBits => Self::OneAndAHalf,
+			WordLength::SixBits => Self::Two,
+			WordLength::SevenBits => Self::Two,
+			WordLength::EightBits => Self::Two,
+		};
+	}
+}
+
 impl<V: std::io::Write> bus::Bus for Uart<V>
 {
-	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
+	fn read<T>(&self, address: usize) -> Result<T, bus::Error>
 	where
 		T: crate::lebytes::LeBytes,
 		[(); <T as crate::lebytes::LeBytes>::SIZE]:,
@@ -113,7 +188,7 @@ impl<V: std::io::Write> bus::Bus for Uart<V>
 	}
 }
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq)]
 struct UartRegisters
 {
 	receiver_buffer: ReadOnlyRegister,
@@ -127,6 +202,28 @@ struct UartRegisters
 	scratch: Register,
 	divisor_latch_ls: Register,
 	divisor_latch_ms: Register,
+}
+
+impl Default for UartRegisters
+{
+	fn default() -> Self
+	{
+		return Self {
+			receiver_buffer: ReadOnlyRegister::default(),
+			transmitter_holding: WriteOnlyRegister::default(),
+			interrupt_enable: Register::default(),
+			interrupt_ident: ReadOnlyRegister::default(),
+			line_control: Register {
+				bits: 0b0000_0011,
+			},
+			modem_control: Register::default(),
+			line_status: Register::default(),
+			modem_status: Register::default(),
+			scratch: Register::default(),
+			divisor_latch_ls: Register::default(),
+			divisor_latch_ms: Register::default(),
+		};
+	}
 }
 
 #[derive(Debug, PartialEq)]
@@ -182,12 +279,12 @@ impl Register
 {
 	fn read(&self) -> u8
 	{
-		todo!("Register::read is not implemented yet!");
+		return self.bits;
 	}
 
-	fn write(&self, _v: u8)
+	fn write(&mut self, v: u8)
 	{
-		todo!("Register::write is not implemented yet!");
+		self.bits = v;
 	}
 }
 impl Default for Register
@@ -205,6 +302,8 @@ enum Error
 {
 	DisallowedRead,
 	DisallowedWrite,
+	InvalidCharacterLength,
+InvalidStopBitMask,
 }
 impl From<Error> for bus::Error
 {
@@ -213,6 +312,12 @@ impl From<Error> for bus::Error
 		match value {
 			Error::DisallowedRead => todo!("bus error disallowed read"),
 			Error::DisallowedWrite => todo!("bus disallowed write"),
+			Error::InvalidCharacterLength => {
+				todo!("no corresponding bus error")
+			},
+			Error::InvalidStopBitMask => {
+				todo!("no corresponding bus error")
+			},
 		}
 	}
 }
@@ -296,10 +401,39 @@ impl From<AddressConvertError> for bus::Error
 	}
 }
 
+enum WordLengthMask
+{
+	FiveBit = 0b0000_0000,
+	SixBit = 0b0000_0001,
+	SevenBit = 0b0000_0010,
+	EightBit = 0b0000_0011,
+}
+
+enum StopBitMask
+{
+	Unset = 0b0000_0000,
+	Set = 0b0000_0100,
+}
+
+impl TryFrom<u8> for StopBitMask {
+	type Error = Error;
+
+	fn try_from(value: u8) -> Result<Self, Self::Error> {
+		return match value {
+			0b0000_0000 => Ok(StopBitMask::Unset),
+			0b0000_0100 => Ok(StopBitMask::Set),
+			_ => Err(Error::InvalidStopBitMask),
+		};
+	}
+}
+
 #[cfg(test)]
 mod test
 {
-	use crate::bus::{Bus, Error, ErrorKind};
+	use crate::{
+		bus::{Bus, Error, ErrorKind},
+		uart::{StopBitCount, WordLength, WordLengthMask, StopBitMask},
+	};
 
 	use super::{RegisterAddress, Uart};
 
@@ -367,7 +501,7 @@ mod test
 		let stdout = MockStdout {
 			buf: Vec::new(),
 		};
-		let mut uart = Uart::<MockStdout>::new(stdout);
+		let uart = Uart::<MockStdout>::new(stdout);
 		let expected = Err(Error::new(
 			ErrorKind::Unimplemented,
 			"multi-byte reads are not implemented yet",
@@ -396,6 +530,105 @@ mod test
 		assert_eq!(expected, actual);
 
 		std::fs::remove_file(TEST_FILE_PATH).unwrap();
+	}
+
+	#[test]
+	fn default_word_length_is_8_bits()
+	{
+		let stdout = MockStdout::default();
+		let uart = Uart::<MockStdout>::new(stdout);
+		let character_length = uart.word_length();
+		assert_eq!(character_length, WordLength::EightBits);
+	}
+
+	#[test]
+	fn writing_to_lcr_lower_2_bits_sets_word_length_correctly() {
+		let stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(stdout);
+
+		uart.write(RegisterAddress::LineControl, WordLengthMask::FiveBit as u8).unwrap();
+		assert_eq!(uart.word_length(), WordLength::FiveBits);
+
+		uart.write(RegisterAddress::LineControl, WordLengthMask::SixBit as u8).unwrap();
+		assert_eq!(uart.word_length(), WordLength::SixBits);
+
+		uart.write(RegisterAddress::LineControl, WordLengthMask::SevenBit as u8).unwrap();
+		assert_eq!(uart.word_length(), WordLength::SevenBits);
+
+		uart.write(RegisterAddress::LineControl, WordLength::EightBits as u8).unwrap();
+		assert_eq!(uart.word_length(), WordLength::EightBits);
+	}
+
+	#[test]
+	fn default_stop_bit_count_is_1()
+	{
+		let stdout = MockStdout::default();
+		let uart = Uart::<MockStdout>::new(stdout);
+
+		assert_eq!(uart.stop_bit_count(), StopBitCount::One);
+	}
+
+	#[test]
+	fn stop_bit_count_is_one_when_stop_bit_count_bit_is_unset() {
+		let stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(stdout);
+		let mask = StopBitMask::Unset as u8;
+		uart.write(RegisterAddress::LineControl, mask).unwrap();
+
+		let stop_bit_count = uart.stop_bit_count();
+
+		assert_eq!(stop_bit_count, StopBitCount::One);
+	}
+
+	#[test]
+	fn stop_bit_count_is_one_and_a_half_when_stop_bit_count_bit_is_set_and_word_length_set_to_five(
+	)
+	{
+
+		let stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(stdout);
+		let mask = StopBitMask::Set as u8 | WordLengthMask::FiveBit as u8;	
+		uart.write(RegisterAddress::LineControl, mask).unwrap();
+
+		let stop_bit_count = uart.stop_bit_count();
+
+		assert_eq!(stop_bit_count, StopBitCount::OneAndAHalf);
+	}
+
+	#[test]
+	fn stop_bit_count_is_two_when_stop_bit_count_is_set_and_word_length_is_six() {
+		let stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(stdout);
+		let mask = StopBitMask::Set as u8 | WordLengthMask::SixBit as u8;
+		uart.write(RegisterAddress::LineControl, mask).unwrap();
+
+		let stop_bit_count = uart.stop_bit_count();
+
+		assert_eq!(stop_bit_count, StopBitCount::Two);
+	}
+
+	#[test]
+	fn stop_bit_count_is_two_when_stop_bit_count_is_set_and_word_length_is_seven() {
+		let stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(stdout);
+		let mask = StopBitMask::Set as u8 | WordLengthMask::SevenBit as u8;
+		uart.write(RegisterAddress::LineControl, mask).unwrap();
+
+		let stop_bit_count = uart.stop_bit_count();
+
+		assert_eq!(stop_bit_count, StopBitCount::Two);
+	}
+
+	#[test]
+	fn stop_bit_count_is_two_when_stop_bit_count_is_set_and_word_length_is_eight() {
+		let stdout = MockStdout::default();
+		let mut uart = Uart::<MockStdout>::new(stdout);
+		let mask = StopBitMask::Set as u8 | WordLengthMask::EightBit as u8;
+		uart.write(RegisterAddress::LineControl, mask).unwrap();
+
+		let stop_bit_count = uart.stop_bit_count();
+
+		assert_eq!(stop_bit_count, StopBitCount::Two);
 	}
 
 	#[derive(Default)]
