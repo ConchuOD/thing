@@ -18,46 +18,46 @@ impl<T: std::io::Write> Uart<T>
 	}
 	fn read_at(&self, address: RegisterAddress) -> Result<u8, Error>
 	{
-		use RegisterAddress::*;
+		use RegisterAddress as A;
 		return match address {
-			ReceiverBuffer => Ok(self.registers.receiver_buffer.read()),
-			TransmitterHolding => Err(Error::DisallowedRead),
-			InterruptEnable => Ok(self.registers.interrupt_enable.read()),
-			InterruptIdent => Err(Error::DisallowedRead),
-			LineControl => Ok(self.registers.line_control.read()),
-			ModemControl => Ok(self.registers.modem_control.read()),
-			LineStatus => Ok(self.registers.line_status.read()),
-			ModemStatus => Ok(self.registers.modem_status.read()),
-			Scratch => Ok(self.registers.scratch.read()),
+			A::ReceiverBuffer => Ok(self.registers.receiver_buffer.read()),
+			A::TransmitterHolding => Err(Error::DisallowedRead),
+			A::InterruptEnable => Ok(self.registers.interrupt_enable.read()),
+			A::InterruptIdent => Err(Error::DisallowedRead),
+			A::LineControl => Ok(self.registers.line_control.read()),
+			A::ModemControl => Ok(self.registers.modem_control.read()),
+			A::LineStatus => Ok(self.registers.line_status.read()),
+			A::ModemStatus => Ok(self.registers.modem_status.read()),
+			A::Scratch => Ok(self.registers.scratch.read()),
 		};
 	}
 	fn write_at(
 		&mut self, address: RegisterAddress, value: u8,
 	) -> Result<(), Error>
 	{
-		use RegisterAddress::*;
+		use RegisterAddress as A;
 		return match address {
-			ReceiverBuffer => Err(Error::DisallowedWrite),
-			TransmitterHolding => {
+			A::ReceiverBuffer => Err(Error::DisallowedWrite),
+			A::TransmitterHolding => {
 				self.registers.transmitter_holding.write(value);
 				Ok(())
 			},
-			InterruptEnable => {
+			A::InterruptEnable => {
 				self.registers.interrupt_enable.write(value);
 				Ok(())
 			},
-			InterruptIdent => Err(Error::DisallowedWrite),
-			LineControl => {
+			A::InterruptIdent => Err(Error::DisallowedWrite),
+			A::LineControl => {
 				self.registers.line_control.write(value);
 				Ok(())
 			},
-			ModemControl => {
+			A::ModemControl => {
 				self.registers.modem_control.write(value);
 				Ok(())
 			},
-			LineStatus => Err(Error::DisallowedWrite),
-			ModemStatus => Err(Error::DisallowedWrite),
-			Scratch => {
+			A::LineStatus => Err(Error::DisallowedWrite),
+			A::ModemStatus => Err(Error::DisallowedWrite),
+			A::Scratch => {
 				self.registers.scratch.write(value);
 				Ok(())
 			},
