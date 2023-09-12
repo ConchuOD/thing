@@ -40,14 +40,18 @@ impl fmt::Display for Error
 
 pub trait Bus
 {
-	fn read<T>(&mut self, address: usize) -> Result<T, Error>
+	fn read<T, const T_SIZE: usize>(
+		&mut self, address: usize,
+	) -> Result<T, Error>
 	where
-		T: LeBytes,
-		[(); <T as LeBytes>::SIZE]:;
+		T: LeBytes<T_SIZE>,
+		[(); T_SIZE]:;
 
-	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), Error>
+	fn write<T, const T_SIZE: usize, U>(
+		&mut self, address: U, value: T,
+	) -> Result<(), Error>
 	where
-		T: LeBytes,
+		T: LeBytes<T_SIZE>,
 		U: Into<usize>,
-		[(); <T as LeBytes>::SIZE]:;
+		[(); T_SIZE]:;
 }

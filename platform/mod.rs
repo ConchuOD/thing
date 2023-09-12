@@ -172,18 +172,14 @@ impl Platform
 		return true;
 	}
 
-	pub fn write_from_hart<T>(
+	pub fn write_from_hart<T, const T_SIZE: usize>(
 		&mut self, hart_id: usize, address: usize, value: T,
 	) -> Result<(), bus::Error>
 	where
-		T: LeBytes,
-		[(); <T as LeBytes>::SIZE]:,
+		T: LeBytes<T_SIZE>,
+		[(); T_SIZE]:,
 	{
-		self.invalidate_reservation_sets(
-			hart_id,
-			address,
-			<T as LeBytes>::SIZE,
-		);
+		self.invalidate_reservation_sets(hart_id, address, T_SIZE);
 
 		return self.write(address, value);
 	}
@@ -191,10 +187,12 @@ impl Platform
 
 impl Bus for Platform
 {
-	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
+	fn read<T, const T_SIZE: usize>(
+		&mut self, address: usize,
+	) -> Result<T, bus::Error>
 	where
-		T: LeBytes,
-		[(); <T as LeBytes>::SIZE]:,
+		T: LeBytes<T_SIZE>,
+		[(); T_SIZE]:,
 	{
 		let memory = &self.memory;
 		if (memory.start..memory.end).contains(&address) {
@@ -207,11 +205,13 @@ impl Bus for Platform
 		));
 	}
 
-	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
+	fn write<T, const T_SIZE: usize, U>(
+		&mut self, address: U, value: T,
+	) -> Result<(), bus::Error>
 	where
-		T: LeBytes,
+		T: LeBytes<T_SIZE>,
 		U: Into<usize>,
-		[(); <T as LeBytes>::SIZE]:,
+		[(); T_SIZE]:,
 	{
 		let address = address.into();
 		let memory = &self.memory;
@@ -265,28 +265,29 @@ impl Default for Memory
 
 impl Bus for Memory
 {
-	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
+	fn read<T, const T_SIZE: usize>(
+		&mut self, address: usize,
+	) -> Result<T, bus::Error>
 	where
-		T: LeBytes,
-		[(); <T as LeBytes>::SIZE]:,
+		T: LeBytes<T_SIZE>,
+		[(); T_SIZE]:,
 	{
 		return Ok(T::from_le_bytes(
-			self.memory[address..address + <T as LeBytes>::SIZE]
-				.try_into()
-				.unwrap(),
+			self.memory[address..address + T_SIZE].try_into().unwrap(),
 		));
 	}
 
-	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
+	fn write<T, const T_SIZE: usize, U>(
+		&mut self, address: U, value: T,
+	) -> Result<(), bus::Error>
 	where
-		T: LeBytes,
+		T: LeBytes<T_SIZE>,
 		U: Into<usize>,
-		[(); <T as LeBytes>::SIZE]:,
+		[(); T_SIZE]:,
 	{
 		let address = address.into();
-		let tmp: [u8; <T as LeBytes>::SIZE] = value.to_le_bytes();
-		self.memory[address..address + <T as LeBytes>::SIZE]
-			.copy_from_slice(&tmp[..<T as LeBytes>::SIZE]);
+		let tmp: [u8; T_SIZE] = value.to_le_bytes();
+		self.memory[address..address + T_SIZE].copy_from_slice(&tmp[..T_SIZE]);
 
 		return Ok(());
 	}

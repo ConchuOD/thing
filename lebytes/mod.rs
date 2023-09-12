@@ -2,68 +2,59 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
-pub trait LeBytes
+pub trait LeBytes<const SIZE: usize>
 {
-	const SIZE: usize;
-	fn to_le_bytes(self) -> [u8; <Self as LeBytes>::SIZE];
-	fn from_le_bytes(input: [u8; <Self as LeBytes>::SIZE]) -> Self;
+	fn to_le_bytes(self) -> [u8; SIZE];
+	fn from_le_bytes(input: [u8; SIZE]) -> Self;
 }
 
-impl LeBytes for u8
+impl LeBytes<1> for u8
 {
-	const SIZE: usize = 1;
-
-	fn to_le_bytes(self) -> [u8; <Self as LeBytes>::SIZE]
+	fn to_le_bytes(self) -> [u8; 1]
 	{
 		return u8::to_le_bytes(self);
 	}
 
-	fn from_le_bytes(input: [u8; <Self as LeBytes>::SIZE]) -> Self
+	fn from_le_bytes(input: [u8; 1]) -> Self
 	{
 		return u8::from_le_bytes(input);
 	}
 }
 
-impl LeBytes for u16
+impl LeBytes<2> for u16
 {
-	const SIZE: usize = 2;
-
-	fn to_le_bytes(self) -> [u8; <Self as LeBytes>::SIZE]
+	fn to_le_bytes(self) -> [u8; 2]
 	{
 		return u16::to_le_bytes(self);
 	}
 
-	fn from_le_bytes(input: [u8; <Self as LeBytes>::SIZE]) -> Self
+	fn from_le_bytes(input: [u8; 2]) -> Self
 	{
 		return u16::from_le_bytes(input);
 	}
 }
 
-impl LeBytes for u32
+impl LeBytes<4> for u32
 {
-	const SIZE: usize = 4;
-
-	fn to_le_bytes(self) -> [u8; <Self as LeBytes>::SIZE]
+	fn to_le_bytes(self) -> [u8; 4]
 	{
 		return u32::to_le_bytes(self);
 	}
 
-	fn from_le_bytes(input: [u8; <Self as LeBytes>::SIZE]) -> Self
+	fn from_le_bytes(input: [u8; 4]) -> Self
 	{
 		return u32::from_le_bytes(input);
 	}
 }
 
-impl LeBytes for u64
+impl LeBytes<8> for u64
 {
-	const SIZE: usize = 8;
-
-	fn to_le_bytes(self) -> [u8; <Self as LeBytes>::SIZE]
+	fn to_le_bytes(self) -> [u8; 8]
 	{
 		return u64::to_le_bytes(self);
 	}
 
-	fn from_le_bytes(input: [u8; <Self as LeBytes>::SIZE]) -> Self
+	fn from_le_bytes(input: [u8; 8]) -> Self
 	{
 		return u64::from_le_bytes(input);
 	}
