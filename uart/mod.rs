@@ -1,18 +1,25 @@
 use crate::{bus, lebytes::LeBytes};
-use std::fmt::Display;
+use std::{
+	fmt::Display,
+	io::Read,
+	io::Write,
+	io::{stdin, stdout},
+};
 
 #[derive(Debug, PartialEq)]
-struct Uart<T: std::io::Write>
+struct Uart<T: std::io::Read, U: std::io::Write>
 {
 	registers: UartRegisters,
-	output: T,
+	input: T,
+	output: U,
 }
-impl<T: std::io::Write> Uart<T>
+impl<T: std::io::Read, U: std::io::Write> Uart<T, U>
 {
-	fn new(output: T) -> Self
+	fn new(input: T, output: U) -> Self
 	{
 		return Self {
 			registers: UartRegisters::default(),
+			input,
 			output,
 		};
 	}
@@ -63,8 +70,13 @@ impl<T: std::io::Write> Uart<T>
 			},
 		};
 	}
+
+	fn poll_stdin(&mut self)
+	{
+		self.registers.line_status.bits = 1;
+	}
 }
-impl<V: std::io::Write> bus::Bus for Uart<V>
+impl<V: std::io::Read, W: std::io::Write> bus::Bus for Uart<V, W>
 {
 	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
 	where
@@ -84,6 +96,7 @@ impl<V: std::io::Write> bus::Bus for Uart<V>
 		}
 		let mut return_bytes = [0; <T as LeBytes>::SIZE];
 		return_bytes[0] = self.read_at(address)?;
+		self.registers.line_status.bits = 0;
 		return Ok(T::from_le_bytes(return_bytes));
 	}
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
@@ -109,6 +122,7 @@ impl<V: std::io::Write> bus::Bus for Uart<V>
 			self.registers.transmitter_holding.bits;
 		let bits = self.registers.transmitter_holding.bits;
 		self.output.write_all(&[bits]).unwrap();
+		self.registers.line_status.bits = 1;
 		return Ok(());
 	}
 }
@@ -299,6 +313,9 @@ impl From<AddressConvertError> for bus::Error
 #[cfg(test)]
 mod test
 {
+	use std::io::Read;
+	use std::io::Write;
+
 	use crate::bus::{Bus, Error, ErrorKind};
 
 	use super::{RegisterAddress, Uart};
@@ -308,7 +325,8 @@ mod test
 	{
 		let expected = 27u8;
 		let mut stdout = MockStdout::default();
-		let mut uart = Uart::new(&mut stdout);
+		let stdin = MockStdin::default();
+		let mut uart = Uart::new(stdin, &mut stdout);
 		uart.write(RegisterAddress::ReceiverBuffer, expected).unwrap();
 
 		let actual = uart.read(0).unwrap();
@@ -319,8 +337,9 @@ mod test
 	#[test]
 	fn writing_to_address_0_sets_transmitter_holding_register()
 	{
-		let mut mock_stdout = MockStdout::default();
-		let mut uart = Uart::new(&mut mock_stdout);
+		let mut stdout = MockStdout::default();
+		let stdin = MockStdin::default();
+		let mut uart = Uart::new(stdin, &mut stdout);
 		let expected = b'f';
 
 		uart.write(0usize, expected).unwrap();
@@ -334,7 +353,8 @@ mod test
 	fn writing_receiver_buffer_register_also_sets_transmitter_holding_register()
 	{
 		let stdout = MockStdout::default();
-		let mut uart = Uart::<MockStdout>::new(stdout);
+		let stdin = MockStdin::default();
+		let mut uart = Uart::new(stdin, stdout);
 		let expected = b'a';
 
 		uart.write(RegisterAddress::ReceiverBuffer, expected).unwrap();
@@ -349,7 +369,8 @@ mod test
 	fn writing_multiple_bytes_causes_bus_error()
 	{
 		let stdout = MockStdout::default();
-		let mut uart = Uart::<MockStdout>::new(stdout);
+		let stdin = MockStdin::default();
+		let mut uart = Uart::new(stdin, stdout);
 		let expected = Err(Error::new(
 			ErrorKind::Unimplemented,
 			"multi-byte writes are not implemented yet",
@@ -367,7 +388,8 @@ mod test
 		let stdout = MockStdout {
 			buf: Vec::new(),
 		};
-		let mut uart = Uart::<MockStdout>::new(stdout);
+		let stdin = MockStdin::default();
+		let mut uart = Uart::new(stdin, stdout);
 		let expected = Err(Error::new(
 			ErrorKind::Unimplemented,
 			"multi-byte reads are not implemented yet",
@@ -383,7 +405,8 @@ mod test
 	{
 		const TEST_FILE_PATH: &str = "test_output";
 		let mut file = std::fs::File::create(TEST_FILE_PATH).unwrap();
-		let mut uart = Uart::new(&mut file);
+		let stdin = MockStdin::default();
+		let mut uart = Uart::new(stdin, &mut file);
 		let bytes: Vec<u8> = "Hello, World!".bytes().collect();
 
 		for byte in &bytes {
@@ -396,6 +419,42 @@ mod test
 		assert_eq!(expected, actual);
 
 		std::fs::remove_file(TEST_FILE_PATH).unwrap();
+	}
+
+	#[test]
+	fn receiving_data_into_uart_sets_lsr_dr_bit()
+	{
+		let stdout_buf: Vec<u8> = Vec::new();
+		let stdout = MockStdout {
+			buf: stdout_buf,
+		};
+		let stdin = MockStdin {
+			data: 1,
+		};
+		let mut uart = Uart::new(stdin, stdout);
+
+		// NOTE(js): uart.poll_stdin is a helper method that's meant to only be
+		// used during development. The poll should really happen when reading
+		// from the uart, but reading also resets the bits that are tested
+		// against here. As such, to be able to test-drive the behaviour,
+		// poll_stdin is directly called in this test.
+		uart.poll_stdin();
+
+		assert_eq!(uart.registers.line_status.bits & 1u8, 1);
+	}
+
+	#[test]
+	fn reading_from_uart_resets_lsr_dr_bit()
+	{
+		let stdout_buf = Vec::new();
+		let stdout = MockStdout {
+			buf: stdout_buf,
+		};
+		let stdin = MockStdin::default();
+		let mut uart = Uart::new(stdin, stdout);
+		uart.registers.line_status.bits = 1;
+		uart.read::<u8>(RegisterAddress::ReceiverBuffer.into()).unwrap();
+		assert_eq!(uart.registers.line_status.bits & 1u8, 0);
 	}
 
 	#[derive(Default)]
@@ -414,6 +473,21 @@ mod test
 		fn flush(&mut self) -> std::io::Result<()>
 		{
 			return self.buf.flush();
+		}
+	}
+
+	#[derive(Default)]
+	struct MockStdin
+	{
+		data: u8,
+	}
+
+	impl std::io::Read for MockStdin
+	{
+		fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize>
+		{
+			buf.write_all(&[self.data])?;
+			return Ok(1);
 		}
 	}
 }
