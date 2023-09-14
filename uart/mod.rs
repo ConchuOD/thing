@@ -73,7 +73,10 @@ impl<T: std::io::Read, U: std::io::Write> Uart<T, U>
 
 	fn poll_stdin(&mut self)
 	{
-		self.registers.line_status.bits = 1;
+		if self.registers.line_status.bits & 1 == 1 {
+			self.registers.line_status.bits |= 2;
+		}
+		self.registers.line_status.bits |= 1;
 	}
 }
 impl<V: std::io::Read, W: std::io::Write> bus::Bus for Uart<V, W>
@@ -196,7 +199,7 @@ impl Register
 {
 	fn read(&self) -> u8
 	{
-		todo!("Register::read is not implemented yet!");
+        return self.bits;
 	}
 
 	fn write(&self, _v: u8)
@@ -455,6 +458,37 @@ mod test
 		uart.registers.line_status.bits = 1;
 		uart.read::<u8>(RegisterAddress::ReceiverBuffer.into()).unwrap();
 		assert_eq!(uart.registers.line_status.bits & 1u8, 0);
+	}
+
+	#[test]
+	fn receiving_data_while_data_is_ready_sets_lsr_overrun_bit()
+	{
+		let mut uart = setup();
+		uart.registers.line_status.bits = 1;
+		uart.poll_stdin();
+		assert_eq!(uart.registers.line_status.bits, 3);
+	}
+
+	#[test]
+	fn reading_line_status_register_clears_buffer_overrun_bit()
+	{
+		let mut uart = setup();
+		uart.registers.line_status.bits |= 2;
+		let status_bits =
+			uart.read::<u8>(RegisterAddress::LineStatus.into()).unwrap();
+		assert_eq!(status_bits, 2);
+		assert!(uart.registers.line_status.bits & 2 == 0);
+	}
+
+	fn setup() -> Uart<MockStdin, MockStdout>
+	{
+		let stdout_buf = Vec::new();
+		let stdout = MockStdout {
+			buf: stdout_buf,
+		};
+		let stdin = MockStdin::default();
+		let uart = Uart::new(stdin, stdout);
+		return uart;
 	}
 
 	#[derive(Default)]
