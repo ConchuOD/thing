@@ -79,6 +79,7 @@ impl<T: std::io::Read, U: std::io::Write> Uart<T, U>
 		self.registers.line_status.bits |= 1;
 	}
 }
+
 impl<V: std::io::Read, W: std::io::Write> bus::Bus for Uart<V, W>
 {
 	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
@@ -88,8 +89,8 @@ impl<V: std::io::Read, W: std::io::Write> bus::Bus for Uart<V, W>
 	{
 		if <T as LeBytes>::SIZE > 1 {
 			return Err(bus::Error::new(
-				bus::ErrorKind::Unimplemented,
-				"multi-byte reads are not implemented yet",
+				bus::ErrorKind::UnsupportedRead,
+				"multi-byte reads are not supported by the uart",
 			));
 		}
 
@@ -102,6 +103,7 @@ impl<V: std::io::Read, W: std::io::Write> bus::Bus for Uart<V, W>
 		self.registers.line_status.bits = 0;
 		return Ok(T::from_le_bytes(return_bytes));
 	}
+
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
 		T: crate::lebytes::LeBytes,
@@ -195,11 +197,12 @@ struct Register
 {
 	bits: u8,
 }
+
 impl Register
 {
 	fn read(&self) -> u8
 	{
-        return self.bits;
+		return self.bits;
 	}
 
 	fn write(&self, _v: u8)
@@ -319,6 +322,7 @@ mod test
 	use std::io::Read;
 	use std::io::Write;
 
+	use crate::bus;
 	use crate::bus::{Bus, Error, ErrorKind};
 
 	use super::{RegisterAddress, Uart};
@@ -386,24 +390,6 @@ mod test
 	}
 
 	#[test]
-	fn reading_multiple_bytes_causes_bus_error()
-	{
-		let stdout = MockStdout {
-			buf: Vec::new(),
-		};
-		let stdin = MockStdin::default();
-		let mut uart = Uart::new(stdin, stdout);
-		let expected = Err(Error::new(
-			ErrorKind::Unimplemented,
-			"multi-byte reads are not implemented yet",
-		));
-
-		let res = uart.read::<u16>(RegisterAddress::TransmitterHolding.into());
-
-		assert_eq!(res, expected);
-	}
-
-	#[test]
 	fn writing_with_file_output_writes_to_file()
 	{
 		const TEST_FILE_PATH: &str = "test_output";
@@ -413,7 +399,6 @@ mod test
 		let bytes: Vec<u8> = "Hello, World!".bytes().collect();
 
 		for byte in &bytes {
-			println!("byte: {}, char: {}", byte, *byte as char);
 			uart.write(RegisterAddress::TransmitterHolding, *byte).unwrap();
 		}
 
@@ -431,9 +416,7 @@ mod test
 		let stdout = MockStdout {
 			buf: stdout_buf,
 		};
-		let stdin = MockStdin {
-			data: 1,
-		};
+		let stdin = MockStdin::default();
 		let mut uart = Uart::new(stdin, stdout);
 
 		// NOTE(js): uart.poll_stdin is a helper method that's meant to only be
@@ -480,6 +463,23 @@ mod test
 		assert!(uart.registers.line_status.bits & 2 == 0);
 	}
 
+	#[test]
+	fn reading_more_than_one_byte_causes_unsupported_read_error()
+	{
+		let input = "some input".as_bytes();
+		let output = MockStdout::default();
+		let mut uart = Uart::new(input, output);
+		let expected_result = Err(bus::Error::new(
+			bus::ErrorKind::UnsupportedRead,
+			"multi-byte reads are not supported by the uart",
+		));
+
+		let acutal_result =
+			uart.read::<u16>(RegisterAddress::ReceiverBuffer.into());
+
+		assert_eq!(acutal_result, expected_result);
+	}
+
 	fn setup() -> Uart<MockStdin, MockStdout>
 	{
 		let stdout_buf = Vec::new();
@@ -510,17 +510,31 @@ mod test
 		}
 	}
 
-	#[derive(Default)]
 	struct MockStdin
 	{
-		data: u8,
+		out_buf: Vec<u8>,
+	}
+
+	impl MockStdin
+	{
+		fn new(output: &[u8]) -> Self
+		{
+			return Self {
+				out_buf: output.to_vec(),
+			};
+		}
+
+		fn default() -> Self
+		{
+			return Self::new(&[1]);
+		}
 	}
 
 	impl std::io::Read for MockStdin
 	{
 		fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize>
 		{
-			buf.write_all(&[self.data])?;
+			buf.write(&[1]);
 			return Ok(1);
 		}
 	}
