@@ -6,6 +6,9 @@ use std::{
 	io::{stdin, stdout},
 };
 
+const BUFFER_OVERRUN_MASK: u8 = 0b00000010;
+const DATA_READY_MASK: u8 = 0b00000001;
+
 #[derive(Debug, PartialEq)]
 struct Uart<T: std::io::Read, U: std::io::Write>
 {
@@ -71,7 +74,7 @@ impl<T: std::io::Read, U: std::io::Write> Uart<T, U>
 		};
 	}
 
-	fn poll_stdin(&mut self)
+	fn poll(&mut self)
 	{
 		if self.registers.line_status.bits & 1 == 1 {
 			self.registers.line_status.bits |= 2;
@@ -91,6 +94,14 @@ impl<V: std::io::Read, W: std::io::Write> bus::Bus for Uart<V, W>
 			return Err(bus::Error::new(
 				bus::ErrorKind::UnsupportedRead,
 				"multi-byte reads are not supported by the uart",
+			));
+		}
+
+		if self.registers.line_status.bits & DATA_READY_MASK != DATA_READY_MASK
+		{
+			return Err(bus::Error::new(
+				bus::ErrorKind::NoData,
+				"can not read from uart before data is ready",
 			));
 		}
 
@@ -324,6 +335,8 @@ mod test
 
 	use crate::bus;
 	use crate::bus::{Bus, Error, ErrorKind};
+	use crate::uart::BUFFER_OVERRUN_MASK;
+	use crate::uart::DATA_READY_MASK;
 
 	use super::{RegisterAddress, Uart};
 
@@ -419,12 +432,12 @@ mod test
 		let stdin = MockStdin::default();
 		let mut uart = Uart::new(stdin, stdout);
 
-		// NOTE(js): uart.poll_stdin is a helper method that's meant to only be
+		// NOTE(js): uart.poll is a helper method that's meant to only be
 		// used during development. The poll should really happen when reading
 		// from the uart, but reading also resets the bits that are tested
 		// against here. As such, to be able to test-drive the behaviour,
 		// poll_stdin is directly called in this test.
-		uart.poll_stdin();
+		uart.poll();
 
 		assert_eq!(uart.registers.line_status.bits & 1u8, 1);
 	}
@@ -447,20 +460,28 @@ mod test
 	fn receiving_data_while_data_is_ready_sets_lsr_overrun_bit()
 	{
 		let mut uart = setup();
-		uart.registers.line_status.bits = 1;
-		uart.poll_stdin();
-		assert_eq!(uart.registers.line_status.bits, 3);
+		uart.registers.line_status.bits |= DATA_READY_MASK;
+		uart.poll();
+		assert_eq!(
+			uart.registers.line_status.bits & BUFFER_OVERRUN_MASK,
+			BUFFER_OVERRUN_MASK
+		);
 	}
 
 	#[test]
 	fn reading_line_status_register_clears_buffer_overrun_bit()
 	{
 		let mut uart = setup();
-		uart.registers.line_status.bits |= 2;
+		uart.registers.line_status.bits |= DATA_READY_MASK;
+		uart.registers.line_status.bits |= BUFFER_OVERRUN_MASK;
 		let status_bits =
 			uart.read::<u8>(RegisterAddress::LineStatus.into()).unwrap();
-		assert_eq!(status_bits, 2);
-		assert!(uart.registers.line_status.bits & 2 == 0);
+		assert_eq!(status_bits & BUFFER_OVERRUN_MASK, BUFFER_OVERRUN_MASK);
+		assert_eq!(status_bits & DATA_READY_MASK, DATA_READY_MASK);
+		assert!(
+			uart.registers.line_status.bits & BUFFER_OVERRUN_MASK
+				!= BUFFER_OVERRUN_MASK
+		);
 	}
 
 	#[test]
@@ -478,6 +499,21 @@ mod test
 			uart.read::<u16>(RegisterAddress::ReceiverBuffer.into());
 
 		assert_eq!(acutal_result, expected_result);
+	}
+
+	#[test]
+	fn reading_from_uart_without_data_ready_causes_error()
+	{
+		let input = "Hello, World".as_bytes();
+		let output = MockStdout::default();
+		let mut uart = Uart::new(input, output);
+
+		let result = uart.read::<u8>(RegisterAddress::ReceiverBuffer.into());
+		let expected = Err(bus::Error::new(
+			bus::ErrorKind::NoData,
+			"can not read from uart before data is ready",
+		));
+		assert_eq!(result, expected);
 	}
 
 	fn setup() -> Uart<MockStdin, MockStdout>

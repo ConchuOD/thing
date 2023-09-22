@@ -11,6 +11,7 @@ pub enum ErrorKind
 	Unimplemented,
 	OutOfBounds,
 	UnsupportedRead,
+	NoData,
 }
 
 #[derive(Debug, PartialEq)]
