@@ -268,17 +268,17 @@ impl TryFrom<usize> for RegisterAddress
 	type Error = AddressConvertError;
 	fn try_from(value: usize) -> Result<Self, Self::Error>
 	{
-		use RegisterAddress::*;
+		use RegisterAddress as A;
 		return match value {
-			0 => Ok(ReceiverBuffer),
-			1 => Ok(TransmitterHolding),
-			2 => Ok(InterruptEnable),
-			3 => Ok(InterruptIdent),
-			4 => Ok(LineControl),
-			5 => Ok(ModemControl),
-			6 => Ok(LineStatus),
-			7 => Ok(ModemStatus),
-			8 => Ok(Scratch),
+			0 => Ok(A::ReceiverBuffer),
+			1 => Ok(A::TransmitterHolding),
+			2 => Ok(A::InterruptEnable),
+			3 => Ok(A::InterruptIdent),
+			4 => Ok(A::LineControl),
+			5 => Ok(A::ModemControl),
+			6 => Ok(A::LineStatus),
+			7 => Ok(A::ModemStatus),
+			8 => Ok(A::Scratch),
 			_ => Err(AddressConvertError),
 		};
 	}
@@ -295,17 +295,17 @@ impl From<RegisterAddress> for u8
 {
 	fn from(val: RegisterAddress) -> Self
 	{
-		use RegisterAddress::*;
+		use RegisterAddress as A;
 		return match val {
-			ReceiverBuffer => 0,
-			TransmitterHolding => 1,
-			InterruptEnable => 2,
-			InterruptIdent => 3,
-			LineControl => 4,
-			ModemControl => 5,
-			LineStatus => 6,
-			ModemStatus => 7,
-			Scratch => 8,
+			A::ReceiverBuffer => 0,
+			A::TransmitterHolding => 1,
+			A::InterruptEnable => 2,
+			A::InterruptIdent => 3,
+			A::LineControl => 4,
+			A::ModemControl => 5,
+			A::LineStatus => 6,
+			A::ModemStatus => 7,
+			A::Scratch => 8,
 		};
 	}
 }
