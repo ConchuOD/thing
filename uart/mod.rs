@@ -461,7 +461,9 @@ mod test
 	#[test]
 	fn receiving_data_while_data_is_ready_sets_lsr_overrun_bit()
 	{
-		let mut uart = setup();
+		let input = MockStdin::default();
+		let output = MockStdout::default();
+		let mut uart = Uart::new(input, output);
 		uart.registers.line_status.bits |= DATA_READY_MASK;
 		uart.poll();
 		assert_eq!(
@@ -473,7 +475,9 @@ mod test
 	#[test]
 	fn reading_line_status_register_clears_buffer_overrun_bit()
 	{
-		let mut uart = setup();
+		let input = MockStdin::default();
+		let output = MockStdout::default();
+		let mut uart = Uart::new(input, output);
 		uart.registers.line_status.bits |= DATA_READY_MASK;
 		uart.registers.line_status.bits |= BUFFER_OVERRUN_MASK;
 		let status_bits =
@@ -516,17 +520,6 @@ mod test
 			"can not read from uart before data is ready",
 		));
 		assert_eq!(result, expected);
-	}
-
-	fn setup() -> Uart<MockStdin, MockStdout>
-	{
-		let stdout_buf = Vec::new();
-		let stdout = MockStdout {
-			buf: stdout_buf,
-		};
-		let stdin = MockStdin::default();
-		let uart = Uart::new(stdin, stdout);
-		return uart;
 	}
 
 	#[derive(Default)]
