@@ -2,11 +2,8 @@ use crate::{
 	bus::{self, Bus, ErrorKind},
 	lebytes::LeBytes,
 };
-use std::{
-	fmt::Display,
-	io::Read,
-	io::Write,
-};
+
+use std::{fmt::Display, io::Read, io::Write};
 
 const BUFFER_OVERRUN_MASK: u8 = 0b00000010;
 const DATA_READY_MASK: u8 = 0b00000001;
@@ -18,6 +15,7 @@ struct Uart<T: Read, U: Write>
 	input: T,
 	output: U,
 }
+
 impl<T: Read, U: Write> Uart<T, U>
 {
 	fn new(input: T, output: U) -> Self
@@ -28,6 +26,7 @@ impl<T: Read, U: Write> Uart<T, U>
 			output,
 		};
 	}
+
 	fn read_at(&self, address: RegisterAddress) -> Result<u8, Error>
 	{
 		use RegisterAddress as A;
@@ -43,6 +42,7 @@ impl<T: Read, U: Write> Uart<T, U>
 			A::Scratch => Ok(self.registers.scratch.read()),
 		};
 	}
+
 	fn write_at(
 		&mut self, address: RegisterAddress, value: u8,
 	) -> Result<(), Error>
@@ -111,6 +111,7 @@ impl<V: Read, W: Write> Bus for Uart<V, W>
 		if address == RegisterAddress::TransmitterHolding {
 			address = RegisterAddress::ReceiverBuffer;
 		}
+
 		let mut return_bytes = [0; <T as LeBytes>::SIZE];
 		return_bytes[0] = self.read_at(address)?;
 		self.registers.line_status.bits = 0;
@@ -135,10 +136,11 @@ impl<V: Read, W: Write> Bus for Uart<V, W>
 		if address == RegisterAddress::ReceiverBuffer {
 			address = RegisterAddress::TransmitterHolding;
 		}
+
 		self.write_at(address, bytes[0])?;
-		self.registers.receiver_buffer.bits =
-			self.registers.transmitter_holding.bits;
+
 		let bits = self.registers.transmitter_holding.bits;
+		self.registers.receiver_buffer.bits = bits;
 		self.output.write_all(&[bits]).unwrap();
 		self.registers.line_status.bits = 1;
 		return Ok(());
@@ -166,6 +168,7 @@ struct ReadOnlyRegister
 {
 	bits: u8,
 }
+
 impl ReadOnlyRegister
 {
 	fn read(&self) -> u8
@@ -173,6 +176,7 @@ impl ReadOnlyRegister
 		return self.bits;
 	}
 }
+
 impl Default for ReadOnlyRegister
 {
 	fn default() -> Self
@@ -188,6 +192,7 @@ struct WriteOnlyRegister
 {
 	bits: u8,
 }
+
 impl WriteOnlyRegister
 {
 	fn write(&mut self, v: u8)
@@ -195,6 +200,7 @@ impl WriteOnlyRegister
 		self.bits = v;
 	}
 }
+
 impl Default for WriteOnlyRegister
 {
 	fn default() -> Self
@@ -223,6 +229,7 @@ impl Register
 		todo!("Register::write is not implemented yet!");
 	}
 }
+
 impl Default for Register
 {
 	fn default() -> Self
@@ -239,6 +246,7 @@ enum Error
 	DisallowedRead,
 	DisallowedWrite,
 }
+
 impl From<Error> for bus::Error
 {
 	fn from(value: Error) -> Self
@@ -263,6 +271,7 @@ enum RegisterAddress
 	ModemStatus = 7,
 	Scratch = 8,
 }
+
 impl TryFrom<usize> for RegisterAddress
 {
 	type Error = AddressConvertError;
@@ -283,6 +292,7 @@ impl TryFrom<usize> for RegisterAddress
 		};
 	}
 }
+
 impl Display for RegisterAddress
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
@@ -291,6 +301,7 @@ impl Display for RegisterAddress
 		return write!(f, "{}", v);
 	}
 }
+
 impl From<RegisterAddress> for u8
 {
 	fn from(val: RegisterAddress) -> Self
@@ -309,6 +320,7 @@ impl From<RegisterAddress> for u8
 		};
 	}
 }
+
 impl From<RegisterAddress> for usize
 {
 	fn from(value: RegisterAddress) -> usize
@@ -345,15 +357,15 @@ mod test
 	#[test]
 	fn reading_from_address_0_returns_receiver_buffer_register_value()
 	{
-		let expected = 27u8;
 		let mut stdout = MockStdout::default();
 		let stdin = MockStdin::default();
 		let mut uart = Uart::new(stdin, &mut stdout);
+		let expected = 27u8;
 		uart.write(RegisterAddress::ReceiverBuffer, expected).unwrap();
 
-		let actual = uart.read(0).unwrap();
+		let actual = uart.read::<u8>(0).unwrap();
 
-		assert_eq!(expected, actual);
+		assert_eq!(actual, expected);
 	}
 
 	#[test]
@@ -366,9 +378,7 @@ mod test
 
 		uart.write(0usize, expected).unwrap();
 
-		let actual =
-			uart.read(RegisterAddress::TransmitterHolding.into()).unwrap();
-		assert_eq!(expected, actual);
+		assert_eq!(uart.registers.transmitter_holding.bits, expected,);
 	}
 
 	#[test]
@@ -380,11 +390,8 @@ mod test
 		let expected = b'a';
 
 		uart.write(RegisterAddress::ReceiverBuffer, expected).unwrap();
-		let actual = uart
-			.read::<u8>(RegisterAddress::TransmitterHolding.into())
-			.unwrap();
 
-		assert_eq!(expected, actual);
+		assert_eq!(uart.registers.transmitter_holding.bits, expected,);
 	}
 
 	#[test]
@@ -398,10 +405,10 @@ mod test
 			"multi-byte writes are not implemented yet",
 		));
 
-		let res = uart
+		let actual = uart
 			.write(RegisterAddress::TransmitterHolding, 0b00000001_00000001u16);
 
-		assert_eq!(res, expected);
+		assert_eq!(actual, expected);
 	}
 
 	#[test]
@@ -454,7 +461,9 @@ mod test
 		let stdin = MockStdin::default();
 		let mut uart = Uart::new(stdin, stdout);
 		uart.registers.line_status.bits = 1;
+
 		uart.read::<u8>(RegisterAddress::ReceiverBuffer.into()).unwrap();
+
 		assert_eq!(uart.registers.line_status.bits & 1u8, 0);
 	}
 
@@ -465,7 +474,9 @@ mod test
 		let output = MockStdout::default();
 		let mut uart = Uart::new(input, output);
 		uart.registers.line_status.bits |= DATA_READY_MASK;
+
 		uart.poll();
+
 		assert_eq!(
 			uart.registers.line_status.bits & BUFFER_OVERRUN_MASK,
 			BUFFER_OVERRUN_MASK
@@ -480,8 +491,10 @@ mod test
 		let mut uart = Uart::new(input, output);
 		uart.registers.line_status.bits |= DATA_READY_MASK;
 		uart.registers.line_status.bits |= BUFFER_OVERRUN_MASK;
+
 		let status_bits =
 			uart.read::<u8>(RegisterAddress::LineStatus.into()).unwrap();
+
 		assert_eq!(status_bits & BUFFER_OVERRUN_MASK, BUFFER_OVERRUN_MASK);
 		assert_eq!(status_bits & DATA_READY_MASK, DATA_READY_MASK);
 		assert!(
@@ -513,13 +526,14 @@ mod test
 		let input = "Hello, World".as_bytes();
 		let output = MockStdout::default();
 		let mut uart = Uart::new(input, output);
-
-		let result = uart.read::<u8>(RegisterAddress::ReceiverBuffer.into());
 		let expected = Err(bus::Error::new(
 			ErrorKind::NoData,
 			"can not read from uart before data is ready",
 		));
-		assert_eq!(result, expected);
+
+		let actual = uart.read::<u8>(RegisterAddress::ReceiverBuffer.into());
+
+		assert_eq!(actual, expected);
 	}
 
 	#[derive(Default)]
