@@ -1,22 +1,24 @@
-use crate::{bus, lebytes::LeBytes};
+use crate::{
+	bus::{self, Bus, ErrorKind},
+	lebytes::LeBytes,
+};
 use std::{
 	fmt::Display,
 	io::Read,
 	io::Write,
-	io::{stdin, stdout},
 };
 
 const BUFFER_OVERRUN_MASK: u8 = 0b00000010;
 const DATA_READY_MASK: u8 = 0b00000001;
 
 #[derive(Debug, PartialEq)]
-struct Uart<T: std::io::Read, U: std::io::Write>
+struct Uart<T: Read, U: Write>
 {
 	registers: UartRegisters,
 	input: T,
 	output: U,
 }
-impl<T: std::io::Read, U: std::io::Write> Uart<T, U>
+impl<T: Read, U: Write> Uart<T, U>
 {
 	fn new(input: T, output: U) -> Self
 	{
@@ -83,16 +85,16 @@ impl<T: std::io::Read, U: std::io::Write> Uart<T, U>
 	}
 }
 
-impl<V: std::io::Read, W: std::io::Write> bus::Bus for Uart<V, W>
+impl<V: Read, W: Write> Bus for Uart<V, W>
 {
 	fn read<T>(&mut self, address: usize) -> Result<T, bus::Error>
 	where
-		T: crate::lebytes::LeBytes,
-		[(); <T as crate::lebytes::LeBytes>::SIZE]:,
+		T: LeBytes,
+		[(); <T as LeBytes>::SIZE]:,
 	{
 		if <T as LeBytes>::SIZE > 1 {
 			return Err(bus::Error::new(
-				bus::ErrorKind::UnsupportedRead,
+				ErrorKind::UnsupportedRead,
 				"multi-byte reads are not supported by the uart",
 			));
 		}
@@ -100,7 +102,7 @@ impl<V: std::io::Read, W: std::io::Write> bus::Bus for Uart<V, W>
 		if self.registers.line_status.bits & DATA_READY_MASK != DATA_READY_MASK
 		{
 			return Err(bus::Error::new(
-				bus::ErrorKind::NoData,
+				ErrorKind::NoData,
 				"can not read from uart before data is ready",
 			));
 		}
@@ -117,14 +119,14 @@ impl<V: std::io::Read, W: std::io::Write> bus::Bus for Uart<V, W>
 
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
-		T: crate::lebytes::LeBytes,
+		T: LeBytes,
 		U: Into<usize>,
-		[(); <T as crate::lebytes::LeBytes>::SIZE]:,
+		[(); <T as LeBytes>::SIZE]:,
 	{
 		let bytes: [u8; <T as LeBytes>::SIZE] = value.to_le_bytes();
 		if bytes.len() > 1 {
 			return Err(bus::Error::new(
-				bus::ErrorKind::Unimplemented,
+				ErrorKind::Unimplemented,
 				"multi-byte writes are not implemented yet",
 			));
 		}
@@ -323,14 +325,14 @@ impl From<AddressConvertError> for bus::Error
 	fn from(value: AddressConvertError) -> Self
 	{
 		_ = value; // NOTE: nothing interesting in here for now.
-		return bus::Error::new(bus::ErrorKind::OutOfBounds, "todo, put a better error message here. needs more context. But uart::AddressConvertError implies that one tried to convert a numerical address into a uart address that does not exist");
+		return bus::Error::new(ErrorKind::OutOfBounds, "todo, put a better error message here. needs more context. But uart::AddressConvertError implies that one tried to convert a numerical address into a uart address that does not exist");
 	}
 }
 
 #[cfg(test)]
 mod test
 {
-	use std::io::Read;
+	use std::fs;
 	use std::io::Write;
 
 	use crate::bus;
@@ -406,9 +408,9 @@ mod test
 	fn writing_with_file_output_writes_to_file()
 	{
 		const TEST_FILE_PATH: &str = "test_output";
-		let mut file = std::fs::File::create(TEST_FILE_PATH).unwrap();
+		let mut output = fs::File::create(TEST_FILE_PATH).unwrap();
 		let stdin = MockStdin::default();
-		let mut uart = Uart::new(stdin, &mut file);
+		let mut uart = Uart::new(stdin, &mut output);
 		let bytes: Vec<u8> = "Hello, World!".bytes().collect();
 
 		for byte in &bytes {
@@ -416,10 +418,10 @@ mod test
 		}
 
 		let expected = String::from_utf8(bytes).unwrap();
-		let actual = std::fs::read_to_string(TEST_FILE_PATH).unwrap();
+		let actual = fs::read_to_string(TEST_FILE_PATH).unwrap();
 		assert_eq!(expected, actual);
 
-		std::fs::remove_file(TEST_FILE_PATH).unwrap();
+		fs::remove_file(TEST_FILE_PATH).unwrap();
 	}
 
 	#[test]
@@ -491,7 +493,7 @@ mod test
 		let output = MockStdout::default();
 		let mut uart = Uart::new(input, output);
 		let expected_result = Err(bus::Error::new(
-			bus::ErrorKind::UnsupportedRead,
+			ErrorKind::UnsupportedRead,
 			"multi-byte reads are not supported by the uart",
 		));
 
@@ -510,7 +512,7 @@ mod test
 
 		let result = uart.read::<u8>(RegisterAddress::ReceiverBuffer.into());
 		let expected = Err(bus::Error::new(
-			bus::ErrorKind::NoData,
+			ErrorKind::NoData,
 			"can not read from uart before data is ready",
 		));
 		assert_eq!(result, expected);
