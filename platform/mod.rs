@@ -7,6 +7,7 @@ use crate::hart::{Hart, RegisterNames};
 use crate::insn::Insn;
 use crate::lebytes::LeBytes;
 use std::error::Error;
+use debug_print::debug_println;
 
 fn u8s_to_insn(input: &[u8; 4]) -> u32
 {
@@ -177,6 +178,7 @@ impl Platform
 	) -> Result<(), bus::Error>
 	where
 		T: LeBytes,
+		T: std::fmt::LowerHex,
 		[(); <T as LeBytes>::SIZE]:,
 	{
 		self.invalidate_reservation_sets(
@@ -194,34 +196,39 @@ impl Bus for Platform
 	fn read<T>(&self, address: usize) -> Result<T, bus::Error>
 	where
 		T: LeBytes,
+		T: std::fmt::LowerHex,
 		[(); <T as LeBytes>::SIZE]:,
 	{
 		let memory = &self.memory;
 		if (memory.start..memory.end).contains(&address) {
-			return self.memory.read(address - MEMORY_BASE);
+			let value = self.memory.read(address - MEMORY_BASE);
+			debug_println!("reading {:x} from address {:x}", value.as_ref().unwrap(), address);
+			return value;
 		}
 
 		return Err(bus::Error::new(
 			bus::ErrorKind::Unimplemented,
-			&format!("addr: {:}", address),
+			&format!("Unimplemented read at addr: {:x}", address),
 		));
 	}
 
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
 		T: LeBytes,
+		T: std::fmt::LowerHex,
 		U: Into<usize>,
 		[(); <T as LeBytes>::SIZE]:,
 	{
 		let address = address.into();
 		let memory = &self.memory;
 		if (memory.start..memory.end).contains(&address) {
+			debug_println!("writing {:x} into address {:x}", value, address);
 			return self.memory.write(address - MEMORY_BASE, value);
 		}
 
 		return Err(bus::Error::new(
 			bus::ErrorKind::Unimplemented,
-			&format!("addr: {:}", address),
+			&format!("Unimplemented write at addr: {:x}", address),
 		));
 	}
 }
@@ -268,8 +275,12 @@ impl Bus for Memory
 	fn read<T>(&self, address: usize) -> Result<T, bus::Error>
 	where
 		T: LeBytes,
+		T: std::fmt::LowerHex,
 		[(); <T as LeBytes>::SIZE]:,
 	{
+		for n in 0..<T as LeBytes>::SIZE {
+			println!("	{:x} {:x}", address + n, self.memory[address + n]);
+		}
 		return Ok(T::from_le_bytes(
 			self.memory[address..address + <T as LeBytes>::SIZE]
 				.try_into()
@@ -280,6 +291,7 @@ impl Bus for Memory
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
 		T: LeBytes,
+		T: std::fmt::LowerHex,
 		U: Into<usize>,
 		[(); <T as LeBytes>::SIZE]:,
 	{

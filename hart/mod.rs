@@ -3,6 +3,8 @@
 #![allow(clippy::needless_return)]
 #![allow(non_camel_case_types)]
 
+use debug_print::debug_println;
+
 pub enum RegisterNames
 {
 	zero,
@@ -71,6 +73,8 @@ impl Hart
 			return;
 		}
 
+		debug_println!("writing {:x} into register {:x}", value, offset);
+
 		self.registers[offset] = value;
 	}
 
@@ -83,7 +87,11 @@ impl Hart
 			return 0_u64;
 		}
 
-		return self.registers[offset];
+		let value = self.registers[offset];
+
+		debug_println!("reading {:x} from register {:x}", value, offset);
+
+		return value;
 	}
 
 	pub fn write_csr<T>(&mut self, offset: T, value: u64)

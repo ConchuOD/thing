@@ -572,8 +572,6 @@ impl Insn
 				_ => todo!("reg reg: {:}", self.func3),
 			}
 		}
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_int_reg_reg32_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -610,6 +608,7 @@ impl Insn
 					// SUBW is to SUB as ADDW is to ADD
 					let tmp: i32 = rs1.wrapping_sub(rs2);
 					let extended: u64 = tmp as i64 as u64;
+					debug_println!("{:} - {:} = {:} == {:x}", rs1, rs2, tmp, extended);
 					hart.write_register(self.rd as usize, extended);
 				}
 			},
@@ -639,8 +638,6 @@ impl Insn
 
 			_ => todo!("reg reg 32: {:}", self.func3),
 		}
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_int_reg_imm_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -715,8 +712,9 @@ impl Insn
 
 			FUNC3_SLLI => {
 				self.name = String::from("slli");
-				src = src.wrapping_shl(shift);
-				hart.write_register(self.rd as usize, src);
+				let tmp = src.wrapping_shl(shift);
+				debug_println!(" shifted {:x} by {:x} to {:x}", src, shift, tmp);
+				hart.write_register(self.rd as usize, tmp);
 			},
 
 			FUNC3_SRLI => {
@@ -735,8 +733,6 @@ impl Insn
 
 			_ => todo!("reg imm: {:}", self.func3),
 		}
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_int_reg_imm32_insn(
@@ -801,8 +797,6 @@ impl Insn
 			},
 			_ => todo!("reg imm32: {:}", self.func3),
 		}
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_store_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -865,8 +859,6 @@ impl Insn
 
 			_ => todo!("store: {:}", self.func3),
 		}
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_load_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -886,7 +878,9 @@ impl Insn
 		match self.func3 {
 			FUNC3_LD => {
 				self.name = String::from("ld");
+				println!(" loading - offset {:x} + base {:x} = {:x}", offset, base, address);
 				let tmp: u64 = platform_bus.read(address as usize).unwrap();
+				println!(" loading - value {:x}", tmp);
 				let hart = &mut (platform_bus).hart;
 				hart.write_register(self.rd as usize, tmp);
 			},
@@ -940,8 +934,6 @@ impl Insn
 				todo!("load: {:}", self.func3);
 			},
 		}
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_csr_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -1053,8 +1045,6 @@ impl Insn
 
 			_ => todo!("csr: {:}", self.func3),
 		}
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_jump_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -1099,8 +1089,6 @@ impl Insn
 
 			_ => todo!("jump"),
 		}
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_branch_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -1214,8 +1202,6 @@ impl Insn
 		} else {
 			self.handle_atomic_rv64_insn(platform);
 		}
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_sc_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -1326,8 +1312,6 @@ impl Insn
 
 		let hart_id = platform_bus.hart.id;
 		let _ = platform_bus.write_from_hart(hart_id, address as usize, val);
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn handle_atomic_rv32_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
@@ -1381,8 +1365,6 @@ impl Insn
 
 		let hart_id = platform_bus.hart.id;
 		let _ = platform_bus.write_from_hart(hart_id, address as usize, val);
-
-		debug_println!("Found {:}", self.name);
 	}
 
 	fn increment_pc(&self, platform: &Arc<RwLock<&mut Platform>>)
@@ -1457,6 +1439,7 @@ impl Insn
 			},
 		}
 
+		debug_println!("Found {:}", self.name);
 		self.increment_pc(&arc);
 
 		return;

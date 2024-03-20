@@ -43,11 +43,13 @@ pub trait Bus
 	fn read<T>(&self, address: usize) -> Result<T, Error>
 	where
 		T: LeBytes,
+		T: std::fmt::LowerHex,
 		[(); <T as LeBytes>::SIZE]:;
 
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), Error>
 	where
 		T: LeBytes,
+		T: std::fmt::LowerHex,
 		U: Into<usize>,
 		[(); <T as LeBytes>::SIZE]:;
 }
