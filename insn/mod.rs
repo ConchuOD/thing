@@ -574,7 +574,9 @@ impl Insn
 		}
 	}
 
-	fn handle_int_reg_reg32_insn(&mut self, platform: &Arc<RwLock<&mut Platform>>)
+	fn handle_int_reg_reg32_insn(
+		&mut self, platform: &Arc<RwLock<&mut Platform>>,
+	)
 	{
 		let hart = &mut (platform.write().unwrap()).hart;
 
