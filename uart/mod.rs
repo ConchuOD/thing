@@ -7,6 +7,7 @@ struct Uart<T: std::io::Write>
 	registers: UartRegisters,
 	output: T,
 }
+
 impl<T: std::io::Write> Uart<T>
 {
 	fn new(output: T) -> Self
@@ -16,6 +17,7 @@ impl<T: std::io::Write> Uart<T>
 			output,
 		};
 	}
+
 	fn read_at(&self, address: RegisterAddress) -> Result<u8, Error>
 	{
 		use RegisterAddress as A;
@@ -31,6 +33,7 @@ impl<T: std::io::Write> Uart<T>
 			A::Scratch => Ok(self.registers.scratch.read()),
 		};
 	}
+
 	fn write_at(
 		&mut self, address: RegisterAddress, value: u8,
 	) -> Result<(), Error>
@@ -87,6 +90,7 @@ impl<V: std::io::Write> bus::Bus for Uart<V>
 		return_bytes[0] = self.read_at(address)?;
 		return Ok(T::from_le_bytes(return_bytes));
 	}
+
 	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
 	where
 		T: crate::lebytes::LeBytes,
@@ -135,6 +139,7 @@ struct ReadOnlyRegister
 {
 	bits: u8,
 }
+
 impl ReadOnlyRegister
 {
 	fn read(&self) -> u8
@@ -142,6 +147,7 @@ impl ReadOnlyRegister
 		return self.bits;
 	}
 }
+
 impl Default for ReadOnlyRegister
 {
 	fn default() -> Self
@@ -157,6 +163,7 @@ struct WriteOnlyRegister
 {
 	bits: u8,
 }
+
 impl WriteOnlyRegister
 {
 	fn write(&mut self, v: u8)
@@ -164,6 +171,7 @@ impl WriteOnlyRegister
 		self.bits = v;
 	}
 }
+
 impl Default for WriteOnlyRegister
 {
 	fn default() -> Self
@@ -179,6 +187,7 @@ struct Register
 {
 	bits: u8,
 }
+
 impl Register
 {
 	fn read(&self) -> u8
@@ -191,6 +200,7 @@ impl Register
 		todo!("Register::write is not implemented yet!");
 	}
 }
+
 impl Default for Register
 {
 	fn default() -> Self
@@ -207,6 +217,7 @@ enum Error
 	DisallowedRead,
 	DisallowedWrite,
 }
+
 impl From<Error> for bus::Error
 {
 	fn from(value: Error) -> Self
@@ -231,6 +242,7 @@ enum RegisterAddress
 	ModemStatus = 7,
 	Scratch = 8,
 }
+
 impl TryFrom<usize> for RegisterAddress
 {
 	type Error = AddressConvertError;
@@ -251,6 +263,7 @@ impl TryFrom<usize> for RegisterAddress
 		};
 	}
 }
+
 impl Display for RegisterAddress
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
@@ -259,6 +272,7 @@ impl Display for RegisterAddress
 		return write!(f, "{}", v);
 	}
 }
+
 impl From<RegisterAddress> for u8
 {
 	fn from(val: RegisterAddress) -> Self
@@ -277,6 +291,7 @@ impl From<RegisterAddress> for u8
 		};
 	}
 }
+
 impl From<RegisterAddress> for usize
 {
 	fn from(value: RegisterAddress) -> usize
