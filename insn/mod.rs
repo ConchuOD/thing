@@ -614,6 +614,29 @@ impl Insn
 				}
 			},
 
+			FUNC3_SLL => {
+				self.name = String::from("sllw");
+				let tmp: u32 = (rs1 as u32).wrapping_shl(shift);
+				hart.write_register(self.rd as usize, tmp as u64);
+			},
+
+			FUNC3_SRL => {
+				// if bit 6 is set, shift the sign bit down
+				let is_sra =
+					(self.func7 & gen_mask!(6, 6, u32)) == FUNC7_SRA;
+				let tmp: u32;
+				if !is_sra {
+					self.name = String::from("srlw");
+					tmp = (rs1 as u32).wrapping_shr(shift);
+				} else {
+					self.name = String::from("sra");
+					tmp = rs1.wrapping_shr(shift) as u32;
+				}
+
+				let extended: u64 = tmp as i64 as u64;
+				hart.write_register(self.rd as usize, extended);
+			},
+
 			_ => todo!("reg reg 32: {:}", self.func3),
 		}
 
