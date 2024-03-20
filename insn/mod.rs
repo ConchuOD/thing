@@ -588,55 +588,71 @@ impl Insn
 		let shift: u32 = (rs2 as u32) & gen_mask!(5, 0, u32);
 
 		if self.func7 == FUNC7_MULDIV {
-			todo!("32-bit M extension stuff is not implemented yet!");
-		}
+			match self.func3 {
+				FUNC3_DIV => {
+					self.name = String::from("divw");
+					let tmp: i32 = rs1 / rs2;
+					hart.write_register(self.rd as usize, tmp as i64 as u64);
+				},
 
-		match self.func3 {
-			FUNC3_ADD => {
-				if self.func7 == FUNC7_ADD {
-					self.name = String::from("addw");
-					// ADDW is like ADD, but operates on
-					// 32-bit values, producing signed
-					// 32-bit results. The results are sign
-					// extended to 64-bit values and written
-					// to rd
-					let tmp: i32 = rs1.wrapping_add(rs2);
+				FUNC3_DIVU => {
+					self.name = String::from("divuw");
+					let tmp: u32 = (rs1 as u32) / (rs2 as u32);
+					hart.write_register(self.rd as usize, tmp as u64);
+				},
+
+				_ => {
+					todo!("Most 32-bit M extension stuff is not implemented yet! - opcode {:b}", self.opcode);
+				}
+			}
+		} else {
+			match self.func3 {
+				FUNC3_ADD => {
+					if self.func7 == FUNC7_ADD {
+						self.name = String::from("addw");
+						// ADDW is like ADD, but operates on
+						// 32-bit values, producing signed
+						// 32-bit results. The results are sign
+						// extended to 64-bit values and written
+						// to rd
+						let tmp: i32 = rs1.wrapping_add(rs2);
+						let extended: u64 = tmp as i64 as u64;
+						hart.write_register(self.rd as usize, extended);
+					} else {
+						self.name = String::from("subw");
+						// SUBW is to SUB as ADDW is to ADD
+						let tmp: i32 = rs1.wrapping_sub(rs2);
+						let extended: u64 = tmp as i64 as u64;
+						debug_println!("{:} - {:} = {:} == {:x}", rs1, rs2, tmp, extended);
+						hart.write_register(self.rd as usize, extended);
+					}
+				},
+
+				FUNC3_SLL => {
+					self.name = String::from("sllw");
+					let tmp: u32 = (rs1 as u32).wrapping_shl(shift);
+					hart.write_register(self.rd as usize, tmp as u64);
+				},
+
+				FUNC3_SRL => {
+					// if bit 6 is set, shift the sign bit down
+					let is_sra =
+						(self.func7 & gen_mask!(6, 6, u32)) == FUNC7_SRA;
+					let tmp: u32;
+					if !is_sra {
+						self.name = String::from("srlw");
+						tmp = (rs1 as u32).wrapping_shr(shift);
+					} else {
+						self.name = String::from("sra");
+						tmp = rs1.wrapping_shr(shift) as u32;
+					}
+
 					let extended: u64 = tmp as i64 as u64;
 					hart.write_register(self.rd as usize, extended);
-				} else {
-					self.name = String::from("subw");
-					// SUBW is to SUB as ADDW is to ADD
-					let tmp: i32 = rs1.wrapping_sub(rs2);
-					let extended: u64 = tmp as i64 as u64;
-					debug_println!("{:} - {:} = {:} == {:x}", rs1, rs2, tmp, extended);
-					hart.write_register(self.rd as usize, extended);
-				}
-			},
+				},
 
-			FUNC3_SLL => {
-				self.name = String::from("sllw");
-				let tmp: u32 = (rs1 as u32).wrapping_shl(shift);
-				hart.write_register(self.rd as usize, tmp as u64);
-			},
-
-			FUNC3_SRL => {
-				// if bit 6 is set, shift the sign bit down
-				let is_sra =
-					(self.func7 & gen_mask!(6, 6, u32)) == FUNC7_SRA;
-				let tmp: u32;
-				if !is_sra {
-					self.name = String::from("srlw");
-					tmp = (rs1 as u32).wrapping_shr(shift);
-				} else {
-					self.name = String::from("sra");
-					tmp = rs1.wrapping_shr(shift) as u32;
-				}
-
-				let extended: u64 = tmp as i64 as u64;
-				hart.write_register(self.rd as usize, extended);
-			},
-
-			_ => todo!("reg reg 32: {:}", self.func3),
+				_ => todo!("reg reg 32: {:}", self.func3),
+			}
 		}
 	}
 
@@ -1375,6 +1391,7 @@ impl Insn
 			_ => {
 				let hart = &mut (platform.write().unwrap()).hart;
 				hart.pc += 4;
+				debug_println!("pc @ {:x}", hart.pc);
 			},
 		}
 	}
