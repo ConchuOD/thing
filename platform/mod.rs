@@ -6,6 +6,7 @@ use crate::bus::{self, Bus};
 use crate::hart::{Hart, RegisterNames};
 use crate::insn::Insn;
 use crate::lebytes::LeBytes;
+use crate::uart::Uart;
 use std::error::Error;
 use debug_print::debug_println;
 
@@ -31,6 +32,7 @@ pub struct Platform
 {
 	pub hart: Hart,
 	memory: Memory,
+	uart: UartInstance,
 	reservation_sets: Vec<ReservationSet>,
 }
 
@@ -206,6 +208,13 @@ impl Bus for Platform
 			return value;
 		}
 
+		let uart = &self.uart;
+		if (uart.start..uart.end).contains(&address) {
+			let value = self.uart.read(address - UART_BASE);
+			debug_println!("reading {:x} from address {:x}", value.as_ref().unwrap(), address);
+			return value;
+		}
+
 		return Err(bus::Error::new(
 			bus::ErrorKind::Unimplemented,
 			&format!("Unimplemented read at addr: {:x}", address),
@@ -226,10 +235,66 @@ impl Bus for Platform
 			return self.memory.write(address - MEMORY_BASE, value);
 		}
 
+		let uart = &self.uart;
+		if (uart.start..uart.end).contains(&address) {
+			debug_println!("writing {:x} into address {:x}", value, address);
+			return self.uart.write(address - UART_BASE, value);
+		}
+
 		return Err(bus::Error::new(
 			bus::ErrorKind::Unimplemented,
 			&format!("Unimplemented write at addr: {:x}", address),
 		));
+	}
+}
+const UART_BASE: usize = 0x2000_0000;
+const UART_SIZE: usize = 0x400;
+const UART_END: usize = UART_BASE + UART_SIZE;
+
+pub struct UartInstance
+{
+	start: usize,
+	end: usize,
+	uart: Uart<std::fs::File>,
+}
+
+impl Default for UartInstance
+{
+	fn default() -> UartInstance
+	{
+		const TEST_FILE_PATH: &str = "test_output";
+		let mut file = std::fs::File::create(TEST_FILE_PATH).unwrap();
+		let mut uart = Uart::new(file);
+
+		return UartInstance {
+			start: UART_BASE,
+			end: UART_END,
+			uart,
+		};
+	}
+}
+
+impl Bus for UartInstance
+{
+	fn read<T>(&self, address: usize) -> Result<T, bus::Error>
+	where
+		T: LeBytes,
+		T: std::fmt::LowerHex,
+		[(); <T as LeBytes>::SIZE]:,
+	{
+		panic!("13");
+		return self.uart.read(address);
+	}
+
+	fn write<T, U>(&mut self, address: U, value: T) -> Result<(), bus::Error>
+	where
+		T: LeBytes,
+		T: std::fmt::LowerHex,
+		U: Into<usize>,
+		[(); <T as LeBytes>::SIZE]:,
+	{
+		panic!("13");
+		return self.uart.write(address, value);
 	}
 }
 

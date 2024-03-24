@@ -6,6 +6,7 @@
 
 use clap::Parser;
 use platform::Platform;
+use crate::uart::Uart;
 use std::fs;
 
 mod bitfield;

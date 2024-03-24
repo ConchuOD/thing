@@ -2,7 +2,7 @@ use crate::{bus, lebytes::LeBytes};
 use std::fmt::Display;
 
 #[derive(Debug, PartialEq)]
-struct Uart<T: std::io::Write>
+pub struct Uart<T: std::io::Write>
 {
 	registers: UartRegisters,
 	output: T,
@@ -10,7 +10,7 @@ struct Uart<T: std::io::Write>
 
 impl<T: std::io::Write> Uart<T>
 {
-	fn new(output: T) -> Self
+	pub fn new(output: T) -> Self
 	{
 		return Self {
 			registers: UartRegisters::default(),
